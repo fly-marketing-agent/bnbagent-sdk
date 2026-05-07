@@ -32,7 +32,7 @@ attributes for advanced workflows (direct `admin` calls, batch reads, etc.).
 | **Policy** | Contract implementing `IPolicy`. `OptimisticPolicy` is v1's only policy. |
 | **Dispute window** | Grace period after `submit` in which the client can call `policy.dispute(jobId)`. Silence ⇒ approve. |
 | **Voter** | Admin-whitelisted EOA that can cast `voteReject`. Reaching `voteQuorum` flips the verdict to REJECT. Voters cannot approve — approval is implicit by silence. |
-| **Permissionless settle** | `router.settle(jobId)` pulls the current verdict from the policy and applies it. Anyone can call; the SDK's agent server auto-settles its own submissions. |
+| **Permissionless settle** | `router.settle(jobId)` pulls the current verdict from the policy and applies it. Anyone can call — clients, voters, or the provider's own operator script. |
 | **Claim refund** | `commerce.claimRefund(jobId)` after `expiredAt` — non-pausable, non-hookable universal escape hatch. |
 | **Platform fee** | Basis points deducted from the budget on `complete` and sent to the platform treasury (configured by the Commerce admin). No fees on `reject` or `claimRefund`. |
 | **Negotiation** | Single-round HTTP exchange. The agreed terms are anchored on-chain in the job `description`. |

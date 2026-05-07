@@ -111,7 +111,7 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 
 | File | Purpose |
 |------|---------|
-| `routes.py` | `create_apex_app()` FastAPI factory; `APEXState`; `/apex/submit`, `/apex/job/{id}`, `/apex/negotiate`, `/apex/status`, `/apex/health`; funded-job background poll loop when `on_job` is provided |
+| `routes.py` | `create_apex_app()` FastAPI factory; `APEXState`; `/apex/job/{id}`, `/apex/negotiate`, `/apex/status`, `/apex/health`; funded-job background poll loop when `on_job` is provided |
 | `job_ops.py` | `APEXJobOps` — async wrapper over `APEXClient`; incremental scan for newly funded jobs; `submit_result` for deliverable submission |
 
 ### `bnbagent/wallets/` — Wallet Providers

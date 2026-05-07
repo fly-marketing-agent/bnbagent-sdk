@@ -18,7 +18,7 @@ silence past the dispute window is implicit approval.
 
 | File | Purpose |
 |------|---------|
-| `watch.py` | Event-driven loop: watches `Disputed` + `VoteCast`, reviews IPFS manifests, prompts to vote, auto-settles on quorum |
+| `watch.py` | Event-driven loop: watches `Disputed` + `VoteCast`, reviews IPFS manifests, prompts to vote, settles automatically once `rejectVotes >= voteQuorum` |
 | `vote_reject.py` | One-shot `voteReject` on a specific jobId (manual fallback) |
 
 ## Setup

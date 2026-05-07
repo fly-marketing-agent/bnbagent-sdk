@@ -1,8 +1,8 @@
 """Thin Python wrapper around ``AgenticCommerceUpgradeable`` (the APEX v1 kernel).
 
 This client is **low-level**: each method maps 1:1 to a Solidity function.
-Approval management, batching, and auto-settle are intentionally left to
-``APEXClient`` (the facade) — ``CommerceClient`` only speaks raw kernel.
+Approval management and batching are intentionally left to ``APEXClient``
+(the facade) — ``CommerceClient`` only speaks raw kernel.
 
 Synchronous by design; async callers should use ``asyncio.to_thread(...)``.
 """

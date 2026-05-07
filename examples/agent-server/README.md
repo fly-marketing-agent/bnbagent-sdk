@@ -6,11 +6,11 @@ provider lifecycle under APEX v1:
 
 ```
 client createJob → registerJob → setBudget → fund
-      └── agent startup-scan picks up FUNDED jobs
+      └── agent's funded-job poll loop picks up FUNDED jobs
           └── on_job(job) returns a news report
               └── SDK builds DeliverableManifest, uploads to IPFS (Pinata),
                   pins as "apex-job-{id}", calls commerce.submit with keccak256 hash
-                  └── auto-settle loop calls router.settle after the dispute window
+      └── after the dispute window an operator (or any party) calls router.settle(jobId)
 ```
 
 No manual UMA assertion / bond step — APEX v1 uses the **OptimisticPolicy**:
@@ -43,12 +43,17 @@ cp .env.example .env
 ### Optional overrides
 
 ```
-NETWORK=bsc-testnet          (default)
-RPC_URL=                     custom RPC endpoint (recommended for rate-limit avoidance)
-STORAGE_GATEWAY_URL=         IPFS gateway (default: https://gateway.pinata.cloud/ipfs/)
-APEX_COMMERCE_ADDRESS=       override Commerce proxy
-APEX_ROUTER_ADDRESS=         override Router proxy
-APEX_POLICY_ADDRESS=         override OptimisticPolicy
+NETWORK=bsc-testnet             (default)
+RPC_URL=                        custom RPC endpoint (recommended for rate-limit avoidance)
+STORAGE_GATEWAY_URL=            IPFS gateway (default: https://gateway.pinata.cloud/ipfs/)
+APEX_COMMERCE_ADDRESS=          override Commerce proxy
+APEX_ROUTER_ADDRESS=            override Router proxy
+APEX_POLICY_ADDRESS=            override OptimisticPolicy
+APEX_FUNDED_POLL_INTERVAL=30    funded-job poll cadence (seconds)
+APEX_NEGOTIATE_RATE_LIMIT=120   /negotiate per-IP request budget
+APEX_NEGOTIATE_RATE_WINDOW=60   rate-limit window (seconds)
+APEX_MAX_RESPONSE_BYTES=5242880 response_content cap (5 MB)
+APEX_MAX_METADATA_BYTES=262144  metadata cap (256 KB)
 ```
 
 ## Usage

@@ -215,6 +215,12 @@ PRIVATE_KEY=0x...                 # first run only; encrypted to ~/.bnbagent/wal
 STORAGE_PROVIDER=ipfs
 STORAGE_API_KEY=your-pinning-service-jwt
 APEX_SERVICE_PRICE=1000000000000000000 # 1 token (18 decimals)
+# Optional knobs (see env-var table below for full reference):
+# APEX_FUNDED_POLL_INTERVAL=30      # default poll cadence (s)
+# APEX_NEGOTIATE_RATE_LIMIT=120     # /negotiate per-IP request budget
+# APEX_NEGOTIATE_RATE_WINDOW=60     # rate-limit window (s)
+# APEX_MAX_RESPONSE_BYTES=5242880   # response_content cap (5 MB)
+# APEX_MAX_METADATA_BYTES=262144    # metadata cap (256 KB)
 ```
 
 ```bash

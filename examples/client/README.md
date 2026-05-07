@@ -14,7 +14,7 @@ provider address.
 | `stalemate_expire.py` | submit → client `dispute` → quorum not reached → job expires → `claimRefund` → **EXPIRED** | refund via expiry |
 | `never_submit.py` | provider never submits → job expires → `claimRefund` → **EXPIRED** | refund via expiry |
 | `cancel_open.py` | client cancels before funding (`reject`) → **REJECTED** | nothing escrowed |
-| `agent_ipfs_test.py` | client funds → triggers agent via HTTP → agent uploads to IPFS → verify manifest hash → `dispute` | full IPFS integration test |
+| `agent_ipfs_test.py` | client funds → agent's funded-poll loop submits → IPFS verify → `dispute` | full IPFS integration test |
 
 ## Setup
 
