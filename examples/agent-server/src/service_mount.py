@@ -240,7 +240,6 @@ if __name__ == "__main__":
 
   APEX endpoints (mounted at /apex):
     POST /apex/negotiate          — Negotiation
-    POST /apex/submit             — Submit result
     GET  /apex/job/{{id}}           — Job details
     GET  /apex/status             — Agent status
 

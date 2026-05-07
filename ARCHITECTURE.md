@@ -139,7 +139,7 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 |-----------|------|----------------------|
 | `client/` | Client | 5 stand-alone scripts — happy / dispute-reject / stalemate-expire / never-submit / cancel-open |
 | `voter/` | Voter | `voteReject` script + `Disputed` event watcher |
-| `agent-server/` | Provider | FastAPI agent with funded-job poll loop and direct negotiate/submit endpoints |
+| `agent-server/` | Provider | FastAPI agent with funded-job poll loop and a public `/negotiate` quote endpoint |
 
 ### `tests/` — Test Suite
 

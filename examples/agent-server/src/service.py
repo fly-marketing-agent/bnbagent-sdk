@@ -160,7 +160,6 @@ print(f"""
 
   APEX endpoints:
     POST /apex/negotiate          — Negotiation
-    POST /apex/submit             — Submit result
     GET  /apex/job/{{id}}           — Job details
     GET  /apex/status             — Agent status
 

@@ -1,7 +1,7 @@
 """FastAPI factory for APEX provider agents.
 
 - ``create_apex_app(...)`` — build a FastAPI sub-app with the APEX endpoints
-  (negotiate / submit / status / job).
+  (negotiate / status / health / job read-only).
 - When ``on_job`` is provided, a background poll loop scans on-chain for
   newly funded jobs assigned to this provider and dispatches each through
   ``on_job`` → ``submit_result`` without exposing an external trigger.
@@ -95,34 +95,8 @@ def create_apex_state(config: APEXConfig | None = None) -> APEXState:
     )
 
 
-def _create_apex_routes(
-    state: APEXState,
-    on_submit: Callable[[int, str, dict], Any] | None = None,
-) -> APIRouter:
+def _create_apex_routes(state: APEXState) -> APIRouter:
     router = APIRouter(tags=["APEX"])
-
-    @router.post("/submit")
-    async def submit_result(request: Request):
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-        job_id = body.get("job_id")
-        if job_id is None:
-            return JSONResponse({"error": "job_id is required"}, status_code=400)
-        response_content = body.get("response_content", "")
-        metadata = body.get("metadata")
-        result = await state.job_ops.submit_result(
-            job_id=int(job_id),
-            response_content=response_content,
-            metadata=metadata,
-        )
-        if result.get("success") and on_submit:
-            try:
-                on_submit(int(job_id), response_content, metadata or {})
-            except Exception as exc:
-                logger.warning(f"[APEX] on_submit callback error: {exc}")
-        return JSONResponse(result, status_code=200 if result.get("success") else 500)
 
     @router.get("/job/{job_id}")
     async def get_job(job_id: int):
@@ -191,7 +165,6 @@ def _create_apex_routes(
 def create_apex_app(
     config: APEXConfig | None = None,
     on_job: Callable[..., Any] | None = None,
-    on_submit: Callable[[int, str, dict], Any] | None = None,
     on_job_skipped: Callable[[dict, str], Any] | None = None,
     task_metadata: dict[str, Any] | None = None,
     prefix: str = "/apex",
@@ -337,7 +310,7 @@ def create_apex_app(
         lifespan=apex_lifespan,
     )
 
-    router = _create_apex_routes(state=state, on_submit=on_submit)
+    router = _create_apex_routes(state=state)
     apex_app.include_router(router, prefix=prefix)
 
     if prefix:
@@ -345,7 +318,6 @@ def create_apex_app(
         @apex_app.get("/")
         async def root():
             endpoints = {
-                "submit": f"{prefix}/submit",
                 "job": f"{prefix}/job/{{job_id}}",
                 "response": f"{prefix}/job/{{job_id}}/response",
                 "verify": f"{prefix}/job/{{job_id}}/verify",

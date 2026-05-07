@@ -91,12 +91,10 @@ src/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/apex/negotiate` | Price negotiation |
-| POST | `/apex/submit` | Submit result |
+| POST | `/apex/negotiate` | Price negotiation (rate-limited) |
 | GET  | `/apex/job/{id}` | Job details |
 | GET  | `/apex/job/{id}/response` | Stored deliverable response |
 | GET  | `/apex/job/{id}/verify` | Job verification |
-| POST | `/apex/job/{id}/settle` | Manual permissionless `router.settle` |
 | GET  | `/apex/status` | Agent status (wallet, contracts, service price) |
 | GET  | `/apex/health` | Health check |
 

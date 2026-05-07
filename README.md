@@ -205,7 +205,7 @@ def execute_job(job: dict) -> str:
     return f"Processed: {job['description']}"
 
 app = create_apex_app(on_job=execute_job)
-# Routes at /apex/submit, /apex/status, /apex/job/{id}, etc.
+# Routes at /apex/negotiate, /apex/status, /apex/job/{id}, etc.
 ```
 
 ```bash
@@ -251,7 +251,6 @@ Starlette does not propagate lifespan events into mounted sub-apps; call `apex_a
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/apex/negotiate` | Price negotiation (off-chain). Returns a structured quote. |
-| `POST` | `/apex/submit` | Provider submits a result. Uploads to storage, submits hash on-chain. |
 | `GET`  | `/apex/job/{id}` | Job details from the Commerce kernel. |
 | `GET`  | `/apex/job/{id}/response` | Stored deliverable for a submitted job. |
 | `GET`  | `/apex/job/{id}/verify` | Verify a job is `FUNDED`, assigned to this provider, not expired, budget ok. |
@@ -413,7 +412,7 @@ Network is pre-configured in the SDK; protocol contracts are not yet deployed.
 
 - **Encrypted keys** — `EVMWalletProvider` uses Keystore V3; plaintext keys are cleared from memory after import.
 - **Submit-time verification** — `submit_result()` re-verifies `FUNDED`, assignment, expiry, and `budget >= service_price` before every on-chain submission.
-- **Budget protection** — Underpriced jobs are rejected with HTTP 402 at `/status`, `/job/{id}/verify`, and on submit.
+- **Budget protection** — Underpriced jobs are rejected with HTTP 402 at `/status`, `/job/{id}/verify`, and at submit time inside `submit_result()`.
 - **Permissionless settle** — `router.settle` is callable by anyone. The SDK does not gatekeep settlement; operators run their own settle script when ready.
 - **Non-pausable refund** — `claimRefund` on the kernel is intentionally not pausable and not hookable: funds can always be reclaimed past `expiredAt`.
 - **Storage permissions** — `LocalStorageProvider` uses `0600`/`0700`.

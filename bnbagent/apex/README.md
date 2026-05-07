@@ -137,10 +137,6 @@ All endpoints are mounted under a configurable prefix (default `/apex`).
 
 Single-round price negotiation. Request body: `{"terms": {...}, "task_description": "..."}`. Returns either an accepted quote (with signed `negotiation_hash`) or a rejection with a reason code.
 
-#### `POST /submit`
-
-Provider submits a deliverable. The SDK builds a `DeliverableManifest` (fields: `job_id`, `chain_id`, `provider`, `response`, `metadata`), uploads it to storage (IPFS or local), submits `manifest_hash()` — keccak256 of the canonical manifest JSON — on-chain as the `deliverable` bytes32, and stores `{"deliverable_url": "ipfs://..."}` in `optParams` so voters and clients can retrieve the full manifest. Body: `{"job_id", "response_content", "metadata"?}`.
-
 #### `GET /job/{id}` / `/response` / `/verify`
 
 Job details from the kernel; stored deliverable; SDK-side preflight (status, provider, expiry, budget ≥ service_price).
