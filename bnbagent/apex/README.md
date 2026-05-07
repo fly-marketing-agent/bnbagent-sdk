@@ -104,9 +104,9 @@ app = create_apex_app(on_job=execute_job)
 Built-in behaviour:
 
 - **Funded-job poll loop** (default 30 s, override via `APEX_FUNDED_POLL_INTERVAL`): incrementally scans `jobCounter` and auto-processes every newly FUNDED job assigned to this provider — no external trigger required.
-- **Auto-settle loop**: polls `policy.check(jobId)` for this agent's submitted jobs and calls `router.settle(jobId)` when the verdict is no longer PENDING.
+- **Settle is delegated** to operator scripts. `router.settle(jobId)` is permissionless; operators run a separate process (or an ad-hoc script using `APEXClient.settle`) once the dispute window elapses or a verdict is finalised.
 
-### Voter-side: `voteReject` + auto-settle
+### Voter-side: `voteReject` and settle
 
 ```python
 from bnbagent.apex import APEXClient
@@ -140,10 +140,6 @@ Single-round price negotiation. Request body: `{"terms": {...}, "task_descriptio
 #### `POST /submit`
 
 Provider submits a deliverable. The SDK builds a `DeliverableManifest` (fields: `job_id`, `chain_id`, `provider`, `response`, `metadata`), uploads it to storage (IPFS or local), submits `manifest_hash()` — keccak256 of the canonical manifest JSON — on-chain as the `deliverable` bytes32, and stores `{"deliverable_url": "ipfs://..."}` in `optParams` so voters and clients can retrieve the full manifest. Body: `{"job_id", "response_content", "metadata"?}`.
-
-#### `POST /job/{id}/settle`
-
-Permissionless `router.settle(jobId)`. Useful for operators; the auto-settle loop handles the common case.
 
 #### `GET /job/{id}` / `/response` / `/verify`
 
@@ -205,7 +201,7 @@ OptimisticPolicy surface:
 ### `APEXJobOps`
 
 Async wrapper over `APEXClient` used by `create_apex_app`. Key methods:
-`submit_result`, `get_job`, `get_response`, `get_pending_jobs`, `verify_job`, `track_for_settle`, `auto_settle_once`. The companion coroutine `run_auto_settle_loop(ops, interval)` drives permissionless settle for provider-owned submissions.
+`submit_result`, `get_job`, `get_response`, `get_pending_jobs`, `verify_job`. Settle is permissionless on-chain and is the responsibility of operator scripts, not the agent server.
 
 ### `NegotiationHandler`
 

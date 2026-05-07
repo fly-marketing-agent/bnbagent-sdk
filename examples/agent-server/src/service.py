@@ -162,7 +162,6 @@ print(f"""
     POST /apex/negotiate          — Negotiation
     POST /apex/submit             — Submit result
     GET  /apex/job/{{id}}           — Job details
-    POST /apex/job/{{id}}/settle    — Manual settle
     GET  /apex/status             — Agent status
 
   Direct endpoints (testing):

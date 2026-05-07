@@ -1,12 +1,12 @@
 """FastAPI factory for APEX provider agents.
 
 - ``create_apex_app(...)`` — build a FastAPI sub-app with the APEX endpoints
-  (negotiate / submit / status / job / settle).
+  (negotiate / submit / status / job).
 - When ``on_job`` is provided, a background poll loop scans on-chain for
   newly funded jobs assigned to this provider and dispatches each through
   ``on_job`` → ``submit_result`` without exposing an external trigger.
-- An optional auto-settle background loop drives ``router.settle(...)`` for
-  this provider's submitted jobs once the dispute window elapses.
+- Settle is permissionless on-chain and is delegated to operator scripts;
+  the agent server no longer auto-settles or exposes a settle endpoint.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ...core.config import get_env
 from ...storage import LocalStorageProvider
 from ..config import APEX_ENV_PREFIX, APEXConfig
 from ..negotiation import NegotiationHandler
-from .job_ops import APEXJobOps, run_auto_settle_loop
+from .job_ops import APEXJobOps
 
 logger = logging.getLogger(__name__)
 
@@ -145,18 +145,6 @@ def _create_apex_routes(
         result = await state.job_ops.verify_job(job_id)
         return JSONResponse(result, status_code=200 if result.get("valid") else 400)
 
-    @router.post("/job/{job_id}/settle")
-    async def settle_job(job_id: int):
-        """Manually trigger permissionless ``router.settle`` for a job.
-
-        Exposed for operators; the auto-settle loop handles the common case.
-        """
-        try:
-            result = await asyncio.to_thread(state.job_ops.apex_client.settle, job_id)
-            return JSONResponse({"success": True, "txHash": result["transactionHash"]})
-        except Exception as exc:
-            return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
-
     @router.post("/negotiate")
     async def negotiate(request: Request):
         try:
@@ -207,8 +195,6 @@ def create_apex_app(
     on_job_skipped: Callable[[dict, str], Any] | None = None,
     task_metadata: dict[str, Any] | None = None,
     prefix: str = "/apex",
-    auto_settle: bool = True,
-    auto_settle_interval: float = 30.0,
     funded_poll_interval: float | None = None,
 ) -> FastAPI:
     """Create a FastAPI application for an APEX provider agent.
@@ -223,19 +209,12 @@ def create_apex_app(
             def on_job(job: dict) -> tuple[str, dict]    # per-job metadata
             async def on_job(job: dict) -> tuple[str, dict]
 
-        The SDK handles verification, submission, and tracking for auto-settle.
         When set, a background poll loop scans on-chain for newly funded jobs
-        and dispatches each through ``on_job``.
+        and dispatches each through ``on_job``. The SDK handles verification
+        and submission internally.
     funded_poll_interval
         Seconds between funded-job poll passes. Falls back to the
         ``APEX_FUNDED_POLL_INTERVAL`` env var (default ``30``).
-    auto_settle
-        If True (default), spawn a background task that calls
-        ``router.settle(jobId)`` for this agent's submitted jobs once the
-        dispute window elapses. The permissionless settle keeps funds
-        flowing without relying on the client to settle.
-    auto_settle_interval
-        Seconds between auto-settle passes.
     """
     state = create_apex_state(config)
     effective_poll_interval = funded_poll_interval or float(
@@ -345,8 +324,6 @@ def create_apex_app(
     async def apex_lifespan(_: FastAPI):
         if on_job:
             _spawn(_funded_poll_loop())
-        if auto_settle:
-            _spawn(run_auto_settle_loop(state.job_ops, auto_settle_interval, stop_event=stop_event))
         yield
         stop_event.set()
         for t in background_tasks:
@@ -372,7 +349,6 @@ def create_apex_app(
                 "job": f"{prefix}/job/{{job_id}}",
                 "response": f"{prefix}/job/{{job_id}}/response",
                 "verify": f"{prefix}/job/{{job_id}}/verify",
-                "settle": f"{prefix}/job/{{job_id}}/settle",
                 "negotiate": f"{prefix}/negotiate",
                 "status": f"{prefix}/status",
                 "health": f"{prefix}/health",

@@ -8,14 +8,14 @@ End-to-end examples for APEX v1 (AgenticCommerce + EvaluatorRouter + OptimisticP
 |---------|------|-------------|
 | [client/](client/) | Client | Stand-alone scripts that walk a job through each of the five canonical flows (happy path, dispute-reject, stalemate-expire, never-submit, cancel-open) |
 | [voter/](voter/) | Voter | Whitelisted voter casting `voteReject` on disputed jobs |
-| [agent-server/](agent-server/) | Provider | FastAPI agent with auto-settle background loop |
+| [agent-server/](agent-server/) | Provider | FastAPI agent with funded-job poll loop |
 
 ## Recommended path
 
 ```
 1. client/      → learn createJob → registerJob → setBudget → fund → submit → settle
 2. voter/       → understand dispute quorum
-3. agent-server → run a full provider with auto-settle
+3. agent-server → run a full provider with the funded-job poll loop
 ```
 
 ## Prerequisites

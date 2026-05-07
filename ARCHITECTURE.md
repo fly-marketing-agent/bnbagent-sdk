@@ -111,8 +111,8 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 
 | File | Purpose |
 |------|---------|
-| `routes.py` | `create_apex_app()` FastAPI factory; `APEXState`; `/apex/submit`, `/apex/job/{id}`, `/apex/job/{id}/settle`, `/apex/negotiate`, `/apex/status`, `/apex/health`; funded-job background poll loop when `on_job` is provided |
-| `job_ops.py` | `APEXJobOps` — async wrapper over `APEXClient`; incremental scan for newly funded jobs; `auto_settle_once` + `run_auto_settle_loop` for permissionless `router.settle` on this provider's submitted jobs |
+| `routes.py` | `create_apex_app()` FastAPI factory; `APEXState`; `/apex/submit`, `/apex/job/{id}`, `/apex/negotiate`, `/apex/status`, `/apex/health`; funded-job background poll loop when `on_job` is provided |
+| `job_ops.py` | `APEXJobOps` — async wrapper over `APEXClient`; incremental scan for newly funded jobs; `submit_result` for deliverable submission |
 
 ### `bnbagent/wallets/` — Wallet Providers
 
@@ -139,7 +139,7 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 |-----------|------|----------------------|
 | `client/` | Client | 5 stand-alone scripts — happy / dispute-reject / stalemate-expire / never-submit / cancel-open |
 | `voter/` | Voter | `voteReject` script + `Disputed` event watcher |
-| `agent-server/` | Provider | FastAPI agent with funded-job poll loop, direct negotiate/submit endpoints, and auto-settle background loop |
+| `agent-server/` | Provider | FastAPI agent with funded-job poll loop and direct negotiate/submit endpoints |
 
 ### `tests/` — Test Suite
 
@@ -167,7 +167,7 @@ from bnbagent.apex import (
     APEXClient, CommerceClient, RouterClient, PolicyClient,
     JobStatus, Verdict, Job,
 )
-from bnbagent.apex.server import create_apex_app, APEXJobOps, run_auto_settle_loop
+from bnbagent.apex.server import create_apex_app, APEXJobOps
 from bnbagent.apex.config import APEXConfig
 from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
 ```
@@ -282,7 +282,7 @@ Happy path (silence approve):
 7. Provider submit(deliverable)  →  APEXClient.submit(...)           Submitted
 8. Wait dispute window           →  time passes
 9. router.settle(jobId, "")      →  APEXClient.settle(...)           Completed
-   (permissionless; the provider agent's auto-settle loop handles it)
+   (permissionless; any party can call from their own wallet)
 ```
 
 Dispute branches:

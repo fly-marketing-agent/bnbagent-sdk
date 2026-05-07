@@ -2,8 +2,7 @@
 
 Focus areas:
 - ``verify_job`` — status / provider / expiry / budget gating.
-- ``auto_settle_once`` — pulls verdict, calls ``router.settle`` only on
-  non-PENDING verdicts, prunes foreign / terminal-state jobs.
+- ``submit_result`` — manifest construction, upload, and on-chain submit.
 """
 
 import time
@@ -12,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from bnbagent.apex.server.job_ops import APEXJobOps
-from bnbagent.apex.types import Job, JobStatus, Verdict
+from bnbagent.apex.types import Job, JobStatus
 
 ME = "0x" + "aa" * 20
 OTHER = "0x" + "bb" * 20
@@ -122,93 +121,9 @@ class TestVerifyJob:
         assert result["valid"] is True
 
 
-class TestAutoSettleOnce:
-    @pytest.mark.asyncio
-    async def test_noop_when_no_tracked_jobs(self):
-        ops = _make_ops()
-        _inject_client(ops)
-        result = await ops.auto_settle_once()
-        assert result == {"success": True, "settled": [], "skipped": []}
-
-    @pytest.mark.asyncio
-    async def test_settles_on_approve_verdict(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.SUBMITTED)
-        client.get_verdict.return_value = (Verdict.APPROVE, b"\x00" * 32)
-        client.settle.return_value = {"transactionHash": "0xabc"}
-        result = await ops.auto_settle_once()
-        assert result["settled"] == [1]
-        assert result["skipped"] == []
-        client.settle.assert_called_once_with(1)
-        assert 1 not in ops._submitted_ids
-
-    @pytest.mark.asyncio
-    async def test_settles_on_reject_verdict(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.SUBMITTED)
-        client.get_verdict.return_value = (Verdict.REJECT, b"\x00" * 32)
-        client.settle.return_value = {"transactionHash": "0xabc"}
-        result = await ops.auto_settle_once()
-        assert result["settled"] == [1]
-
-    @pytest.mark.asyncio
-    async def test_skips_on_pending_verdict(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.SUBMITTED)
-        client.get_verdict.return_value = (Verdict.PENDING, b"\x00" * 32)
-        result = await ops.auto_settle_once()
-        assert result["skipped"] == [1]
-        assert result["settled"] == []
-        client.settle.assert_not_called()
-        assert 1 in ops._submitted_ids
-
-    @pytest.mark.asyncio
-    async def test_drops_foreign_jobs(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.SUBMITTED, provider=OTHER)
-        result = await ops.auto_settle_once()
-        assert 1 not in ops._submitted_ids
-        assert result["settled"] == []
-        client.get_verdict.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_drops_terminal_state_jobs(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.COMPLETED)
-        result = await ops.auto_settle_once()
-        assert 1 not in ops._submitted_ids
-        assert result["settled"] == []
-        client.get_verdict.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_settle_tx_failure_retained_for_retry(self):
-        ops = _make_ops()
-        client = _inject_client(ops)
-        ops.track_for_settle(1)
-        client.get_job.return_value = _job(status=JobStatus.SUBMITTED)
-        client.get_verdict.return_value = (Verdict.APPROVE, b"\x00" * 32)
-        client.settle.side_effect = RuntimeError("already settled")
-        result = await ops.auto_settle_once()
-        assert result["settled"] == []
-        assert result["errors"]
-        assert result["errors"][0][0] == 1
-        # A race is not a permanent state — next pass will re-check.
-        assert 1 in ops._submitted_ids
-
-
 class TestSubmitResult:
     @pytest.mark.asyncio
-    async def test_submit_tracks_job_for_settle(self, tmp_path):
+    async def test_submit_uploads_and_returns_deliverable(self, tmp_path):
         from bnbagent.storage.local_provider import LocalStorageProvider
 
         storage = LocalStorageProvider(str(tmp_path))
@@ -223,7 +138,6 @@ class TestSubmitResult:
 
         result = await ops.submit_result(1, "hello")
         assert result["success"] is True
-        assert 1 in ops._submitted_ids
         assert "deliverable" in result
         assert "deliverableUrl" in result
 

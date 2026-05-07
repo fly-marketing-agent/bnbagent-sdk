@@ -82,7 +82,7 @@ pip install "bnbagent[server,ipfs]"
 | **Policy** | A contract implementing `IPolicy` that produces a verdict for a given job. `OptimisticPolicy` is the only v1 policy. |
 | **Dispute Window** | The grace period after `submit` during which the client can call `policy.dispute(jobId)`. Silence = approve. |
 | **Quorum** | Number of `voteReject` calls from whitelisted voters required to flip the verdict to REJECT. |
-| **Settle** | `router.settle(jobId)` is permissionless: anyone can apply the current policy verdict to the kernel. The provider's SDK runs this automatically via an auto-settle loop. |
+| **Settle** | `router.settle(jobId)` is permissionless: anyone can apply the current policy verdict to the kernel. Operators are expected to run a separate settle script. |
 | **Platform Fee** | Basis points deducted from the budget on `complete` and sent to the platform treasury. |
 | **Expiry Refund** | `claimRefund(jobId)` after `expiredAt`. Non-pausable, non-hookable — the universal escape hatch. |
 
@@ -110,7 +110,7 @@ Client                          Contracts                              Provider 
   │                                │                                        │
   │                                │       voteReject(jobId) ◄── voters     │
   │                                │                                        │
-  │  settle(jobId) — permissionless, provider auto-settles:                 │
+  │  settle(jobId) — permissionless, anyone can call:                       │
   │     ──► Router pulls Policy.check(jobId)                                │
   │         ├─ verdict = APPROVE ──► Commerce.complete  status = COMPLETED  │
   │         └─ verdict = REJECT  ──► Commerce.reject    status = REJECTED   │
@@ -205,7 +205,7 @@ def execute_job(job: dict) -> str:
     return f"Processed: {job['description']}"
 
 app = create_apex_app(on_job=execute_job)
-# Routes at /apex/submit, /apex/status, /apex/job/{id}/settle, etc.
+# Routes at /apex/submit, /apex/status, /apex/job/{id}, etc.
 ```
 
 ```bash
@@ -221,7 +221,7 @@ APEX_SERVICE_PRICE=1000000000000000000 # 1 token (18 decimals)
 uvicorn agent:app --port 8003
 ```
 
-`create_apex_app()` handles: wallet keystore, periodic on-chain poll for newly FUNDED jobs assigned to this provider, on-chain verification, calling your handler, uploading the deliverable to storage, submitting on-chain, and **auto-settling** the provider's own submissions via the permissionless `router.settle` once the dispute window elapses. Jobs with `budget < service_price` are rejected with HTTP 402.
+`create_apex_app()` handles: wallet keystore, periodic on-chain poll for newly FUNDED jobs assigned to this provider, on-chain verification, calling your handler, uploading the deliverable to storage, and submitting on-chain. Jobs with `budget < service_price` are rejected with HTTP 402. Settle is permissionless — run a separate operator script to call `router.settle(jobId)` once the dispute window elapses.
 
 ### Option 2: Mount on Existing App (sub-app)
 
@@ -255,7 +255,6 @@ Starlette does not propagate lifespan events into mounted sub-apps; call `apex_a
 | `GET`  | `/apex/job/{id}` | Job details from the Commerce kernel. |
 | `GET`  | `/apex/job/{id}/response` | Stored deliverable for a submitted job. |
 | `GET`  | `/apex/job/{id}/verify` | Verify a job is `FUNDED`, assigned to this provider, not expired, budget ok. |
-| `POST` | `/apex/job/{id}/settle` | Manually call `router.settle(jobId)` (permissionless). |
 | `GET`  | `/apex/status` | Agent wallet, contract addresses, service price, payment token, decimals. |
 | `GET`  | `/apex/health` | Liveness check. |
 
@@ -271,9 +270,9 @@ async def on_job(job: dict) -> tuple[str, dict]: ...
 
 `job` contains: `jobId`, `description`, `budget`, `client`, `provider`, `evaluator`, `status` (always `FUNDED`), `expiredAt`, `hook`.
 
-### Auto-Settle Loop
+### Settle
 
-`create_apex_app(..., auto_settle=True, auto_settle_interval=30.0)` (default) spawns a background task that polls `policy.check(jobId)` for this provider's submitted jobs and calls `router.settle(jobId)` when the verdict flips away from PENDING. The permissionless settle means clients don't have to do anything — the agent gets paid automatically.
+`router.settle(jobId)` is permissionless — any party can finalise a submitted job once its dispute window elapses. The SDK does not run an in-server settle loop; operators are expected to run a separate script that polls verdicts and calls `APEXClient.settle(jobId)` when ready.
 
 ---
 
@@ -367,7 +366,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full code map, module system, inv
 - `bnbagent/apex/router.py` — `RouterClient` (low-level Router).
 - `bnbagent/apex/policy.py` — `PolicyClient` (low-level OptimisticPolicy).
 - `bnbagent/apex/_erc20.py` — internal minimal ERC-20 client for the payment token.
-- `bnbagent/apex/server/` — FastAPI factory, async job ops, auto-settle loop.
+- `bnbagent/apex/server/` — FastAPI factory and async job ops with funded-job poll loop.
 
 ### Wallet Providers
 
@@ -406,7 +405,7 @@ Network is pre-configured in the SDK; protocol contracts are not yet deployed.
 |---------|------|-------------|
 | [`examples/client/`](examples/client/) | Client | Five stand-alone scripts for the canonical APEX flows: happy / dispute-reject / stalemate-expire / never-submit / cancel-open. |
 | [`examples/voter/`](examples/voter/) | Voter | `voteReject` script + `Disputed` event watcher for whitelisted voters. |
-| [`examples/agent-server/`](examples/agent-server/) | Provider | FastAPI agent that searches blockchain news via DuckDuckGo. Demonstrates `create_apex_app()`, startup scan, auto-settle, and ERC-8004 registration. |
+| [`examples/agent-server/`](examples/agent-server/) | Provider | FastAPI agent that searches blockchain news via DuckDuckGo. Demonstrates `create_apex_app()`, the funded-job poll loop, and ERC-8004 registration. |
 
 ---
 
@@ -415,7 +414,7 @@ Network is pre-configured in the SDK; protocol contracts are not yet deployed.
 - **Encrypted keys** — `EVMWalletProvider` uses Keystore V3; plaintext keys are cleared from memory after import.
 - **Submit-time verification** — `submit_result()` re-verifies `FUNDED`, assignment, expiry, and `budget >= service_price` before every on-chain submission.
 - **Budget protection** — Underpriced jobs are rejected with HTTP 402 at `/status`, `/job/{id}/verify`, and on submit.
-- **Permissionless settle** — `router.settle` is callable by anyone. The provider's auto-settle loop is purely an incentive convenience; it does not gatekeep settlement.
+- **Permissionless settle** — `router.settle` is callable by anyone. The SDK does not gatekeep settlement; operators run their own settle script when ready.
 - **Non-pausable refund** — `claimRefund` on the kernel is intentionally not pausable and not hookable: funds can always be reclaimed past `expiredAt`.
 - **Storage permissions** — `LocalStorageProvider` uses `0600`/`0700`.
 
@@ -432,7 +431,7 @@ Network is pre-configured in the SDK; protocol contracts are not yet deployed.
 | `409 Not FUNDED` | Wrong job status | Job may already be submitted / settled. |
 | `408 Job expired` | Past `expiredAt` | Create a new job; client can `claimRefund` the old one. |
 | `402 Budget below service price` | `budget < APEX_SERVICE_PRICE` | Client must create a job with a higher budget (visible at `GET /apex/status`). |
-| `router.settle` reverts with `policy pending` | Dispute window hasn't elapsed and no dispute was raised | Wait; auto-settle retries next pass. |
+| `router.settle` reverts with `policy pending` | Dispute window hasn't elapsed and no dispute was raised | Wait until `policy.check(jobId)` returns a non-PENDING verdict, then retry. |
 | `voteReject` reverts with `not voter` / `not disputed` | Caller not whitelisted, or no dispute exists | Use [`examples/voter/vote_reject.py`](examples/voter/vote_reject.py) — it validates before sending. |
 
 ---

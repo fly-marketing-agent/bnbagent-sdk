@@ -28,7 +28,7 @@ pytest -v
 | `test_wallet.py` | `EVMWalletProvider` — keystore encryption, signing |
 | `test_apex_client.py` | `APEXClient` — facade construction, approve_floor strategy, delegation |
 | `test_apex_config.py` | `APEXConfig` — validation, env var loading |
-| `test_apex_job_ops.py` | `APEXJobOps` — async verify / submit / auto-settle |
+| `test_apex_job_ops.py` | `APEXJobOps` — async verify / submit / pending-job scan |
 | `test_negotiation.py` | `NegotiationHandler` — terms, hashing, price validation |
 | `test_service_record.py` | `ServiceRecord` — serialization, canonical JSON, hash computation |
 | `test_nonce_manager.py` | `NonceManager` — singleton, thread safety, error recovery |

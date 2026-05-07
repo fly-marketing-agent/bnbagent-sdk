@@ -29,7 +29,7 @@ from ...storage.interface import StorageProvider
 from ...wallets.wallet_provider import WalletProvider
 from ..client import APEXClient
 from ..schema import SCHEMA_VERSION, DeliverableManifest
-from ..types import JobStatus, Verdict
+from ..types import JobStatus
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,6 @@ class APEXJobOps:
         self._last_known_counter: int = 0
         self._startup_scan_done: bool = False
         self._pending_open_ids: set[int] = set()
-        # Jobs in Submitted state we own, for auto-settle tracking.
-        self._submitted_ids: set[int] = set()
 
     # ----------------------------------------------------------- construction
 
@@ -144,7 +142,6 @@ class APEXJobOps:
                 apex.submit, job_id, deliverable, {"deliverable_url": deliverable_url}
             )
             logger.info(f"[APEXJobOps] submit({job_id}) tx: {result['transactionHash']}")
-            self._submitted_ids.add(job_id)
             return {
                 "success": True,
                 "txHash": result["transactionHash"],
@@ -353,11 +350,8 @@ class APEXJobOps:
                 self._pending_open_ids.discard(job.id)
             elif job.status == JobStatus.OPEN:
                 self._pending_open_ids.add(job.id)
-            elif job.status == JobStatus.SUBMITTED:
-                self._submitted_ids.add(job.id)
             else:
                 self._pending_open_ids.discard(job.id)
-                self._submitted_ids.discard(job.id)
 
         return {"success": True, "jobs": pending}
 
@@ -404,104 +398,3 @@ class APEXJobOps:
             logger.error(f"[APEXJobOps] get_pending_jobs failed: {exc}")
             return {"success": False, "error": str(exc), "jobs": []}
 
-    # --------------------------------------------------------- auto-settle
-
-    def track_for_settle(self, job_id: int) -> None:
-        """Register a submitted job for the auto-settle loop."""
-        self._submitted_ids.add(job_id)
-
-    async def auto_settle_once(self) -> dict[str, Any]:
-        """Single pass of the auto-settle loop.
-
-        For each tracked ``Submitted`` job owned by this provider, read the
-        current verdict via the Policy's ``check`` and, if it is APPROVE or
-        REJECT, call ``router.settle(jobId)``. Pending verdicts are skipped
-        and retried on the next pass.
-        """
-        if not self._submitted_ids:
-            return {"success": True, "settled": [], "skipped": []}
-
-        apex = self._get_client()
-        me = self.agent_address.lower()
-        settled: list[int] = []
-        skipped: list[int] = []
-        errors: list[tuple[int, str]] = []
-
-        for job_id in list(self._submitted_ids):
-            try:
-                job = await asyncio.to_thread(apex.get_job, job_id)
-            except Exception as exc:
-                errors.append((job_id, f"get_job failed: {exc}"))
-                continue
-
-            if job.provider.lower() != me:
-                # Stop tracking foreign jobs (defensive).
-                self._submitted_ids.discard(job_id)
-                continue
-            if job.status != JobStatus.SUBMITTED:
-                # Already settled by someone else, or moved to a terminal state.
-                self._submitted_ids.discard(job_id)
-                continue
-
-            try:
-                verdict, _reason = await asyncio.to_thread(apex.get_verdict, job_id)
-            except Exception as exc:
-                errors.append((job_id, f"get_verdict failed: {exc}"))
-                continue
-
-            if verdict == Verdict.PENDING:
-                skipped.append(job_id)
-                continue
-
-            try:
-                result = await asyncio.to_thread(apex.settle, job_id)
-                logger.info(
-                    f"[APEXJobOps] auto-settle({job_id}) verdict={verdict.name}"
-                    f" tx={result['transactionHash']}"
-                )
-                settled.append(job_id)
-                self._submitted_ids.discard(job_id)
-            except Exception as exc:
-                # Another settler may have won the race; re-check next pass.
-                logger.warning(f"[APEXJobOps] settle({job_id}) failed: {exc}")
-                errors.append((job_id, f"settle failed: {exc}"))
-
-        return {
-            "success": True,
-            "settled": settled,
-            "skipped": skipped,
-            "errors": errors,
-        }
-
-
-async def run_auto_settle_loop(
-    ops: APEXJobOps,
-    interval: float = 30.0,
-    *,
-    stop_event: asyncio.Event | None = None,
-) -> None:
-    """Long-running background task: periodically call ``auto_settle_once``.
-
-    Stops when ``stop_event`` is set (if provided) or on cancellation.
-    Exceptions inside a pass are logged and the loop continues — permissionless
-    ``settle`` calls are inherently racey and transient failures are expected.
-    """
-    logger.info(f"[APEXJobOps] auto-settle loop starting (interval={interval:.1f}s)")
-    try:
-        while True:
-            try:
-                await ops.auto_settle_once()
-            except Exception as exc:
-                logger.warning(f"[APEXJobOps] auto-settle pass error: {exc}")
-
-            if stop_event is not None:
-                try:
-                    await asyncio.wait_for(stop_event.wait(), timeout=interval)
-                    break
-                except asyncio.TimeoutError:
-                    continue
-            else:
-                await asyncio.sleep(interval)
-    except asyncio.CancelledError:
-        logger.info("[APEXJobOps] auto-settle loop cancelled")
-        raise

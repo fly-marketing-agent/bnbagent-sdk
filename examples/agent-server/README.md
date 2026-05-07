@@ -100,13 +100,11 @@ src/
 | GET  | `/apex/status` | Agent status (wallet, contracts, service price) |
 | GET  | `/apex/health` | Health check |
 
-## Auto-settle
+## Settle
 
-`create_apex_app(..., auto_settle=True)` (default) spawns a background loop
-that polls `policy.check(jobId)` for this agent's submitted jobs and calls
-`router.settle(jobId)` once the dispute window elapses. Settle is
-permissionless, so clients don't have to do anything — the agent just gets
-paid automatically. Tune with `auto_settle_interval=<seconds>`.
+`router.settle(jobId)` is permissionless. The agent server does not
+auto-settle; operators run a separate script (or REPL) that calls
+`APEXClient.settle(jobId)` once a verdict is finalised.
 
 ## IPFS Storage
 
