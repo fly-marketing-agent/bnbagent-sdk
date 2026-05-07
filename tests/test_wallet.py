@@ -170,3 +170,33 @@ class TestEVMWalletProvider:
         assert wallet.address == account.address
         assert not legacy_path.exists()  # Removed after migration
         assert (wdir / f"{account.address}.json").is_file()
+
+    def test_migrate_legacy_zeroes_file_before_unlink(
+        self, wdir, tmp_path, monkeypatch
+    ):
+        """Legacy file is overwritten with NUL bytes before unlink (best-effort erase)."""
+        account = Account.from_key(PK)
+        keystore = Account.encrypt(account.key, PW)
+        payload = json.dumps({"keystore": keystore, "address": account.address})
+        legacy_path = tmp_path / ".bnbagent_state"
+        legacy_path.write_text(payload)
+        original_size = legacy_path.stat().st_size
+
+        captured: list[bytes] = []
+        real_write_bytes = type(legacy_path).write_bytes
+
+        def spy_write_bytes(self, data, *a, **kw):
+            if self == legacy_path:
+                captured.append(data)
+            return real_write_bytes(self, data, *a, **kw)
+
+        from pathlib import Path
+
+        monkeypatch.setattr(Path, "write_bytes", spy_write_bytes)
+        monkeypatch.chdir(tmp_path)
+
+        EVMWalletProvider(password=PW, wallets_dir=wdir)
+
+        assert not legacy_path.exists()
+        assert captured, "expected write_bytes to be called on the legacy file"
+        assert captured[0] == b"\x00" * original_size

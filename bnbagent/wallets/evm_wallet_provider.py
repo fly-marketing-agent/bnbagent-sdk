@@ -264,7 +264,20 @@ class EVMWalletProvider(WalletProvider):
             self._source = "loaded_keystore"
             self._save_keystore()
 
-            # Remove legacy file after successful migration
+            # Best-effort secure erase: overwrite the legacy file with zero
+            # bytes before unlink so the plaintext key blocks become harder
+            # to recover via filesystem carving. (Modern fs / SSD can still
+            # retain copies via journals or wear-levelling; this raises the
+            # bar without claiming forensic-grade erasure.)
+            try:
+                file_size = legacy_path.stat().st_size
+                legacy_path.write_bytes(b"\x00" * file_size)
+            except OSError as exc:
+                logger.warning(
+                    "Failed to overwrite %s before deletion (proceeding): %s",
+                    legacy_path,
+                    exc,
+                )
             legacy_path.unlink()
             logger.info(
                 "Migrated wallet from .bnbagent_state to %s/%s.json",

@@ -96,6 +96,28 @@ class TestInit:
         assert config.private_key == ""
         assert VALID_PK not in repr(config)
 
+    def test_warns_when_private_key_env_persists_after_wrap(
+        self, monkeypatch, caplog
+    ):
+        import logging
+
+        monkeypatch.setenv("PRIVATE_KEY", VALID_PK)
+        with caplog.at_level(logging.WARNING, logger="bnbagent.core.config"):
+            APEXConfig(private_key=VALID_PK, wallet_password=VALID_PASSWORD)
+        assert any(
+            "PRIVATE_KEY is still set" in r.message for r in caplog.records
+        )
+
+    def test_no_env_warning_when_private_key_unset(self, monkeypatch, caplog):
+        import logging
+
+        monkeypatch.delenv("PRIVATE_KEY", raising=False)
+        with caplog.at_level(logging.WARNING, logger="bnbagent.core.config"):
+            APEXConfig(private_key=VALID_PK, wallet_password=VALID_PASSWORD)
+        assert not any(
+            "PRIVATE_KEY is still set" in r.message for r in caplog.records
+        )
+
     def test_repr_with_wallet_provider(self):
         mock_wallet = MagicMock()
         mock_wallet.address = "0x" + "ff" * 20

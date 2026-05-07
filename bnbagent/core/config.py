@@ -101,6 +101,16 @@ class AgentConfig:
             )
             self.private_key = ""
 
+            if os.getenv("PRIVATE_KEY"):
+                logger.warning(
+                    "PRIVATE_KEY is still set in the environment after the "
+                    "keystore import succeeded. The encrypted keystore at "
+                    "~/.bnbagent/wallets/<address>.json is now the source of "
+                    "truth — remove PRIVATE_KEY from your .env / shell to "
+                    "avoid leaking the plaintext key via commits, backups, "
+                    "or container images."
+                )
+
         # Password-only path: load an existing keystore if one is on disk,
         # otherwise let EVMWalletProvider auto-generate a fresh wallet.
         elif not self.private_key and not self.wallet_provider and self.wallet_password:
