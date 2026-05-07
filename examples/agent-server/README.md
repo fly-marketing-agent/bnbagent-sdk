@@ -87,6 +87,7 @@ scripts/
   register.py            # One-time ERC-8004 registration
   run_agent.py           # Run standalone app (service.py)
   run_agent_mount.py     # Run mount mode (service_mount.py)
+  settle.py              # Operator settle for a SUBMITTED job (post-verdict)
 src/
   service.py             # create_apex_app() — APEX owns the app
   service_mount.py       # create_apex_app() + app.mount() — mount onto existing app
@@ -105,9 +106,19 @@ src/
 
 ## Settle
 
-`router.settle(jobId)` is permissionless. The agent server does not
-auto-settle; operators run a separate script (or REPL) that calls
-`APEXClient.settle(jobId)` once a verdict is finalised.
+`router.settle(jobId)` is permissionless — any wallet can finalise a
+SUBMITTED job and pay the gas. The agent server does not auto-settle, so
+the typical operator action after the dispute window elapses without
+dispute is to run the v1 helper script once per job:
+
+```bash
+uv run python scripts/settle.py 42
+```
+
+The helper checks that the job is `SUBMITTED` and the verdict is no
+longer `PENDING` before sending the transaction. If the loaded wallet is
+not `job.provider` it prints a warning but still proceeds, since settle
+is permissionless. (A future `bnbagent` CLI will subsume this script.)
 
 ## IPFS Storage
 
