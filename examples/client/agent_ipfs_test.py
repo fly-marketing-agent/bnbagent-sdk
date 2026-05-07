@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import time
 
-from _helpers import banner, load_settings, make_client, minutes_from_now
+from _helpers import banner, expiry_for, load_settings, make_client
 
 POLL_INTERVAL = 5    # seconds between status polls
 POLL_TIMEOUT  = 240  # allow for one full poll cycle + on-chain submission
@@ -38,7 +38,7 @@ def main() -> None:
     budget   = 1 * (10 ** decimals)
 
     # --- 1. Create + register + fund ----------------------------------------
-    expired_at = minutes_from_now(65)
+    expired_at = expiry_for(client)
     res = client.create_job(
         provider=s.provider_address,
         expired_at=expired_at,
@@ -73,9 +73,9 @@ def main() -> None:
 
     # --- 4. Verify manifest hash via IPFS -----------------------------------
     import httpx
-    deliverable_url = client.commerce.get_deliverable_url(job_id)
+    deliverable_url = client.get_deliverable_url(job_id)
     print(f"  deliverableUrl:  {deliverable_url}")
-    if deliverable_url.startswith("ipfs://"):
+    if deliverable_url and deliverable_url.startswith("ipfs://"):
         cid = deliverable_url[len("ipfs://"):]
         gateway_url = f"https://gateway.pinata.cloud/ipfs/{cid}"
         print(f"\n[client] fetching manifest from IPFS: {gateway_url}")

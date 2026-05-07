@@ -8,7 +8,7 @@ Client gets a refund; provider keeps nothing.
 
 from __future__ import annotations
 
-from _helpers import banner, load_settings, make_client, minutes_from_now
+from _helpers import banner, expiry_for, load_settings, make_client
 
 from bnbagent.apex import DeliverableManifest, JobStatus, SCHEMA_VERSION
 
@@ -21,7 +21,7 @@ def main() -> None:
 
     decimals = client.token_decimals()
     budget = 1 * (10 ** decimals)
-    expired_at = minutes_from_now(65)
+    expired_at = expiry_for(client)
 
     res = client.create_job(
         provider=s.provider_address,

@@ -6,7 +6,7 @@ No escrow ever moved, no provider action needed.
 
 from __future__ import annotations
 
-from _helpers import banner, load_settings, make_client, minutes_from_now
+from _helpers import banner, expiry_for, load_settings, make_client
 
 from bnbagent.apex import JobStatus
 
@@ -17,7 +17,7 @@ def main() -> None:
 
     banner("CANCEL OPEN — client cancels before funding")
 
-    expired_at = minutes_from_now(30)
+    expired_at = expiry_for(client, slack_minutes=1)
     res = client.create_job(
         provider=s.provider_address,
         expired_at=expired_at,

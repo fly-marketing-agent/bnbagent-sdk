@@ -64,6 +64,19 @@ def minutes_from_now(minutes: int) -> int:
     return int(time.time()) + minutes * 60
 
 
+def expiry_for(client: APEXClient, slack_minutes: int = 10) -> int:
+    """Return an ``expiredAt`` that fits the policy's dispute window.
+
+    The on-chain ``OptimisticPolicy`` rejects ``commerce.submit`` with
+    ``SubmissionTooLate`` unless ``submit_time + disputeWindow <= expiredAt``.
+    Reading the policy's current window (instead of a hard-coded minutes
+    value) keeps every demo robust against contract-side reconfiguration
+    of the window.
+    """
+    dispute_window = client.policy.dispute_window()
+    return int(time.time()) + int(dispute_window) + slack_minutes * 60
+
+
 def banner(msg: str) -> None:
     print()
     print("=" * 60)
