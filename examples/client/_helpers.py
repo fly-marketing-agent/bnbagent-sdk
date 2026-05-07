@@ -68,10 +68,18 @@ def expiry_for(client: APEXClient, slack_minutes: int = 10) -> int:
     """Return an ``expiredAt`` that fits the policy's dispute window.
 
     The on-chain ``OptimisticPolicy`` rejects ``commerce.submit`` with
-    ``SubmissionTooLate`` unless ``submit_time + disputeWindow <= expiredAt``.
-    Reading the policy's current window (instead of a hard-coded minutes
-    value) keeps every demo robust against contract-side reconfiguration
-    of the window.
+    ``SubmissionTooLate`` unless ``submit_time + disputeWindow <= expiredAt``,
+    so ``expiredAt = now + disputeWindow + slack``. ``slack`` is the
+    provider's window to complete poll → on_job → IPFS upload → on-chain
+    submit before the deadline expires.
+
+    The 10-minute default fits a clean happy-path run (poll cadence ~30 s,
+    on_job/IPFS/submit ~10 s combined). It is **demo-grade only** — once a
+    job is funded with this expiry, restarting the agent mid-flow or
+    debugging for tens of minutes can push the deadline past the submit
+    cutoff and the provider has to abandon the job. Production clients
+    should set ``slack`` to hours or days; pass an explicit
+    ``slack_minutes=`` here when iterating in a long-running session.
     """
     dispute_window = client.policy.dispute_window()
     return int(time.time()) + int(dispute_window) + slack_minutes * 60
