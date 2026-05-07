@@ -104,6 +104,7 @@ app = create_apex_app(on_job=execute_job)
 Built-in behaviour:
 
 - **Funded-job poll loop** (default 30 s, override via `APEX_FUNDED_POLL_INTERVAL`): incrementally scans `jobCounter` and auto-processes every newly FUNDED job assigned to this provider — no external trigger required.
+- **Deliverable size caps**: `submit_result` rejects oversized payloads before upload — `response_content` is capped at 5 MB and the `metadata` JSON at 256 KB. Override via `APEX_MAX_RESPONSE_BYTES` / `APEX_MAX_METADATA_BYTES`. Excess returns `error_code=413`.
 - **Settle is delegated** to operator scripts. `router.settle(jobId)` is permissionless; operators run a separate process (or an ad-hoc script using `APEXClient.settle`) once the dispute window elapses or a verdict is finalised.
 
 ### Voter-side: `voteReject` and settle

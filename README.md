@@ -346,6 +346,8 @@ See [`examples/client/`](examples/client/) for the five canonical flows (happy, 
 | `APEX_FUNDED_POLL_INTERVAL` | No | `30` | Seconds between funded-job poll passes (agent-server). |
 | `APEX_NEGOTIATE_RATE_LIMIT` | No | `120` | Max `/negotiate` requests per window per client IP. |
 | `APEX_NEGOTIATE_RATE_WINDOW` | No | `60` | Sliding-window length for `/negotiate` rate limit, in seconds. |
+| `APEX_MAX_RESPONSE_BYTES` | No | `5242880` (5 MB) | Cap on `response_content` size in `submit_result`. |
+| `APEX_MAX_METADATA_BYTES` | No | `262144` (256 KB) | Cap on serialised metadata size in `submit_result`. |
 | `ERC8004_REGISTRY_ADDRESS` | No | Network default | ERC-8004 Identity Registry override. |
 | `STORAGE_PROVIDER` | No | `local` | Storage backend: `"local"` or `"ipfs"`. |
 | `STORAGE_API_KEY` | If IPFS | — | JWT / API key for the pinning service. |

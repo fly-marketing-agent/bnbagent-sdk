@@ -9,9 +9,6 @@ Responsibilities
 - Discover pending funded jobs for this agent.
 - Verify jobs (status / provider / expiry / budget / negotiation quote).
 - Submit deliverables (with optional off-chain upload via ``StorageProvider``).
-- Auto-settle the provider's own jobs once the dispute window elapses
-  (permissionless ``router.settle``; the provider just happens to be the
-  natural operator with incentive to do so).
 """
 
 from __future__ import annotations
@@ -25,13 +22,44 @@ from typing import Any
 from web3 import Web3
 
 from ...config import NetworkConfig
+from ...core.config import get_env
 from ...storage.interface import StorageProvider
 from ...wallets.wallet_provider import WalletProvider
 from ..client import APEXClient
+from ..config import APEX_ENV_PREFIX
 from ..schema import SCHEMA_VERSION, DeliverableManifest
 from ..types import JobStatus
 
 logger = logging.getLogger(__name__)
+
+
+_DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024  # 5 MB
+_DEFAULT_MAX_METADATA_BYTES = 256 * 1024       # 256 KB
+
+
+def _read_int_env(key: str, default: int) -> int:
+    raw = get_env(key, prefix=APEX_ENV_PREFIX)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+        if value <= 0:
+            raise ValueError
+        return value
+    except ValueError:
+        logger.warning(
+            "[APEXJobOps] %s%s=%r invalid, using default %d",
+            APEX_ENV_PREFIX, key, raw, default,
+        )
+        return default
+
+
+def _max_response_bytes() -> int:
+    return _read_int_env("MAX_RESPONSE_BYTES", _DEFAULT_MAX_RESPONSE_BYTES)
+
+
+def _max_metadata_bytes() -> int:
+    return _read_int_env("MAX_METADATA_BYTES", _DEFAULT_MAX_METADATA_BYTES)
 
 
 class APEXJobOps:
@@ -110,6 +138,33 @@ class APEXJobOps:
                     "success": False,
                     "error": f"Job verification failed: {verification.get('error', 'unknown')}",
                 }
+
+            max_resp = _max_response_bytes()
+            actual_resp = len(response_content.encode("utf-8"))
+            if actual_resp > max_resp:
+                return {
+                    "success": False,
+                    "error": (
+                        f"response_content size {actual_resp} bytes exceeds "
+                        f"limit {max_resp} bytes"
+                    ),
+                    "error_code": 413,
+                }
+
+            if metadata is not None:
+                max_meta = _max_metadata_bytes()
+                actual_meta = len(
+                    json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+                )
+                if actual_meta > max_meta:
+                    return {
+                        "success": False,
+                        "error": (
+                            f"metadata size {actual_meta} bytes exceeds "
+                            f"limit {max_meta} bytes"
+                        ),
+                        "error_code": 413,
+                    }
 
             apex = self._get_client()
 

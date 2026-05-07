@@ -21,6 +21,8 @@ Environment (agent-server/.env):
     APEX_FUNDED_POLL_INTERVAL=30                — Funded-job poll interval (seconds)
     APEX_NEGOTIATE_RATE_LIMIT=120               — /negotiate per-IP rate limit (requests)
     APEX_NEGOTIATE_RATE_WINDOW=60               — /negotiate rate-limit window (seconds)
+    APEX_MAX_RESPONSE_BYTES=5242880             — submit_result response_content cap (5 MB)
+    APEX_MAX_METADATA_BYTES=262144              — submit_result metadata cap (256 KB)
 """
 
 import logging

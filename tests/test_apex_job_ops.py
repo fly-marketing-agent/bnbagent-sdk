@@ -198,6 +198,47 @@ class TestSubmitResult:
         assert result["success"] is False
         client.submit.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_response_content_size_cap_enforced(self, monkeypatch):
+        monkeypatch.setenv("APEX_MAX_RESPONSE_BYTES", "1024")
+        ops = _make_ops()
+        client = _inject_client(ops)
+        client.get_job.return_value = _job(status=JobStatus.FUNDED)
+        result = await ops.submit_result(1, "x" * 1025)
+        assert result["success"] is False
+        assert result["error_code"] == 413
+        assert "response_content size" in result["error"]
+        client.submit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_metadata_size_cap_enforced(self, monkeypatch):
+        monkeypatch.setenv("APEX_MAX_METADATA_BYTES", "256")
+        ops = _make_ops()
+        client = _inject_client(ops)
+        client.get_job.return_value = _job(status=JobStatus.FUNDED)
+        result = await ops.submit_result(1, "ok", metadata={"k": "v" * 400})
+        assert result["success"] is False
+        assert result["error_code"] == 413
+        assert "metadata size" in result["error"]
+        client.submit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_within_caps_proceeds(self, tmp_path):
+        from bnbagent.storage.local_provider import LocalStorageProvider
+
+        storage = LocalStorageProvider(str(tmp_path))
+        ops = _make_ops(storage=storage)
+        client = _inject_client(ops)
+        client.get_job.return_value = _job(status=JobStatus.FUNDED)
+        client.submit.return_value = {"transactionHash": "0xaa"}
+        client.commerce.address = "0x" + "11" * 20
+        client.router.address = "0x" + "22" * 20
+        client.policy.address = "0x" + "33" * 20
+        client.commerce.w3.eth.chain_id = 97
+
+        result = await ops.submit_result(1, "ok", metadata={"small": "value"})
+        assert result["success"] is True
+
 
 class TestGetPendingJobs:
     @pytest.mark.asyncio
