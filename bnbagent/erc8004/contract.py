@@ -16,6 +16,7 @@ from web3 import Web3
 from web3.contract.contract import ContractFunction
 from web3.types import TxReceipt
 
+from ..core.contract_mixin import MIN_GAS_PRICE_WEI
 from ..core.paymaster import Paymaster
 
 if TYPE_CHECKING:
@@ -131,7 +132,7 @@ class ContractInterface:
                         "chainId": self.web3.eth.chain_id,
                         "nonce": nonce,
                         "gas": gas_limit,
-                        "gasPrice": self.web3.eth.gas_price,
+                        "gasPrice": max(self.web3.eth.gas_price, MIN_GAS_PRICE_WEI),
                     }
                 )
 
@@ -165,8 +166,10 @@ class ContractInterface:
                 nonce = self.web3.eth.get_transaction_count(wallet_address, "pending")
                 logger.debug(f"Got nonce from Web3: {nonce}")
 
-                # Get gas price from network
-                gas_price = self.web3.eth.gas_price
+                # Get gas price from network, floored at MIN_GAS_PRICE_WEI so a
+                # low ``eth_gasPrice`` reading on quiet networks does not leave
+                # the tx stranded in mempool below the miner cutoff.
+                gas_price = max(self.web3.eth.gas_price, MIN_GAS_PRICE_WEI)
                 logger.debug(f"Gas price: {gas_price}")
 
                 # Build transaction
