@@ -6,14 +6,13 @@ Tier 1 (public API — available via ``from bnbagent import ...``):
     ERC8004Agent, AgentEndpoint
     WalletProvider, EVMWalletProvider
     APEXClient, JobStatus, Verdict
-    StorageConfig
 
 Tier 2 (import from subpackage):
     from bnbagent.apex import CommerceClient, RouterClient, PolicyClient, NegotiationHandler
     from bnbagent.apex.server import create_apex_app, APEXJobOps
     from bnbagent.apex.config import APEXConfig
     from bnbagent.core import create_web3, load_erc20_abi
-    from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
+    from bnbagent.storage_providers import LocalStorageProvider, IPFSStorageProvider
 """
 
 from __future__ import annotations
@@ -32,9 +31,6 @@ from .exceptions import BNBAgentError
 
 # High-level facade
 from .main import BNBAgent
-
-# Storage
-from .storage import StorageConfig
 
 # Wallets
 from .wallets import EVMWalletProvider, WalletProvider
@@ -56,6 +52,4 @@ __all__ = [
     "APEXClient",
     "JobStatus",
     "Verdict",
-    # Storage
-    "StorageConfig",
 ]

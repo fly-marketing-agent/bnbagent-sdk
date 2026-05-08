@@ -44,8 +44,8 @@ making the SDK backend-agnostic.
               └────┬──────┘           │
                    │                  │
             ┌──────▼──────┐    ┌──────▼──────┐
-            │    core     │    │   storage   │
-            │ (infra)     │    │ (off-chain) │
+            │    core     │    │ storage_    │
+            │ (infra)     │    │ providers   │
             └─────────────┘    └─────────────┘
 ```
 
@@ -122,15 +122,13 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 | `evm_wallet_provider.py` | `EVMWalletProvider` — Keystore V3 encryption (scrypt + AES-128-CTR) |
 | `mpc_wallet_provider.py` | `MPCWalletProvider` — stub for future MPC signer support |
 
-### `bnbagent/storage/` — Storage Providers
+### `bnbagent/storage_providers/` — Storage Providers
 
 | File | Purpose |
 |------|---------|
-| `interface.py` | `StorageProvider` ABC — async `upload()`, `download()`, `exists()`, `compute_hash()` |
-| `config.py` | `StorageConfig` dataclass |
-| `factory.py` | `create_storage_provider(config)` factory |
-| `local_provider.py` | `LocalStorageProvider` — filesystem (`file://` URLs) |
-| `ipfs_provider.py` | `IPFSStorageProvider` — IPFS pinning via HTTP API (Pinata-compatible) |
+| `storage_provider.py` | `StorageProvider` ABC — async `upload()`, `download()`, `exists()`, `compute_hash()` |
+| `local_provider.py` | `LocalStorageProvider` — filesystem (`file://` URLs); owns its own `from_env()` |
+| `ipfs_provider.py` | `IPFSStorageProvider` — IPFS pinning via HTTP API (Pinata-compatible); owns its own `from_env()` |
 | `sync_utils.py` | `upload_sync()` — synchronous bridge |
 
 ### `examples/`
@@ -169,7 +167,7 @@ from bnbagent.apex import (
 )
 from bnbagent.apex.server import create_apex_app, APEXJobOps
 from bnbagent.apex.config import APEXConfig
-from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
+from bnbagent.storage_providers import LocalStorageProvider, IPFSStorageProvider
 ```
 
 ## Module System

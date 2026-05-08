@@ -143,7 +143,7 @@ app = create_apex_app(config=config, on_job=process_task)
 # Startup banner — printed at import time so it shows regardless of how
 # the server is launched (run_agent.py, uvicorn CLI, __main__, etc.)
 # ---------------------------------------------------------------------------
-from bnbagent.storage.ipfs_provider import IPFSStorageProvider as _IPFS
+from bnbagent.storage_providers.ipfs_provider import IPFSStorageProvider as _IPFS
 
 _storage_info = "local (default)"
 if isinstance(config.storage, _IPFS):

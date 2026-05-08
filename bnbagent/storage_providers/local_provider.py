@@ -13,7 +13,7 @@ import stat
 from pathlib import Path
 
 from ..exceptions import StorageError
-from .interface import StorageProvider
+from .storage_provider import StorageProvider
 
 logger = logging.getLogger(__name__)
 

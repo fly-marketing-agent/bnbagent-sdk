@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .config import StorageConfig
-from .interface import StorageProvider
+from .storage_provider import StorageProvider
 from .local_provider import LocalStorageProvider
 
 

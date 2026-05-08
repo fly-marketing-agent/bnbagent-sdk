@@ -39,7 +39,7 @@ from ..config import NetworkConfig
 from ..core.config import AgentConfig, get_env
 
 if TYPE_CHECKING:
-    from ..storage.interface import StorageProvider
+    from ..storage_providers.storage_provider import StorageProvider
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,7 @@ class APEXConfig(AgentConfig):
 
     storage: StorageProvider | None = field(default=None, repr=False)
     service_price: str = "1000000000000000000"  # 1 token (18 decimals default)
+    agent_url: str | None = None  # public base URL of this agent, e.g. "http://host:8003/apex"
 
     def __repr__(self) -> str:
         nc = self.effective_network
@@ -154,8 +155,8 @@ class APEXConfig(AgentConfig):
                     "a new wallet will be auto-generated"
                 )
 
-        from ..storage.config import StorageConfig
-        from ..storage.factory import create_storage_provider
+        from ..storage_providers.factory import create_storage_provider
+        from ..storage_providers.config import StorageConfig
 
         storage = create_storage_provider(StorageConfig.from_env())
 
@@ -165,6 +166,7 @@ class APEXConfig(AgentConfig):
             service_price=get_env(
                 "SERVICE_PRICE", "1000000000000000000", prefix=APEX_ENV_PREFIX
             ),
+            agent_url=get_env("AGENT_URL", prefix=APEX_ENV_PREFIX),
             **wallet_kwargs,
         )
 

@@ -172,7 +172,7 @@ class TestVerifyJob:
 class TestSubmitResult:
     @pytest.mark.asyncio
     async def test_submit_uploads_and_returns_deliverable(self, tmp_path):
-        from bnbagent.storage.local_provider import LocalStorageProvider
+        from bnbagent.storage_providers.local_provider import LocalStorageProvider
 
         storage = LocalStorageProvider(str(tmp_path))
         ops = _make_ops(storage=storage)
@@ -224,7 +224,7 @@ class TestSubmitResult:
 
     @pytest.mark.asyncio
     async def test_within_caps_proceeds(self, tmp_path):
-        from bnbagent.storage.local_provider import LocalStorageProvider
+        from bnbagent.storage_providers.local_provider import LocalStorageProvider
 
         storage = LocalStorageProvider(str(tmp_path))
         ops = _make_ops(storage=storage)

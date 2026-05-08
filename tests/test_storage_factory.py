@@ -2,10 +2,10 @@
 
 import pytest
 
-from bnbagent.storage.config import StorageConfig
-from bnbagent.storage.factory import create_storage_provider, storage_provider_from_env
-from bnbagent.storage.ipfs_provider import IPFSStorageProvider
-from bnbagent.storage.local_provider import LocalStorageProvider
+from bnbagent.storage_providers.config import StorageConfig
+from bnbagent.storage_providers.factory import create_storage_provider, storage_provider_from_env
+from bnbagent.storage_providers.ipfs_provider import IPFSStorageProvider
+from bnbagent.storage_providers.local_provider import LocalStorageProvider
 
 
 class TestCreateStorageProvider:

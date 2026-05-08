@@ -23,7 +23,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from ...core.config import get_env
-from ...storage import LocalStorageProvider
+from ...storage_providers import LocalStorageProvider
 from ..config import APEX_ENV_PREFIX, APEXConfig
 from ..negotiation import NegotiationHandler
 from .job_ops import APEXJobOps

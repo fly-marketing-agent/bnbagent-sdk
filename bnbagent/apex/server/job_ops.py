@@ -23,7 +23,7 @@ from web3 import Web3
 
 from ...config import NetworkConfig
 from ...core.config import get_env
-from ...storage.interface import StorageProvider
+from ...storage_providers.storage_provider import StorageProvider
 from ...wallets.wallet_provider import WalletProvider
 from ..client import APEXClient
 from ..config import APEX_ENV_PREFIX
@@ -413,6 +413,9 @@ class APEXJobOps:
             if job is None:
                 continue
             if job.provider.lower() != me:
+                logger.debug(
+                    f"[APEXJobOps] job #{job.id} skipped: provider={job.provider} != agent={me}"
+                )
                 self._pending_open_ids.discard(job.id)
                 continue
             if job.status == JobStatus.FUNDED and job.expired_at > now:
@@ -457,6 +460,7 @@ class APEXJobOps:
         self._startup_scan_done = True
         logger.info(
             f"[APEXJobOps] Startup scan: {len(result['jobs'])} pending of {counter} total"
+            f" (agent={self.agent_address})"
         )
         return result
 

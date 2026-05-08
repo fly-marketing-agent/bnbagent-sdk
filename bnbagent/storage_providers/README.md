@@ -1,8 +1,8 @@
-# Storage
+# Storage Providers
 
 ## Overview
 
-The `storage` module provides a pluggable off-chain storage interface for the
+The `storage_providers` module provides a pluggable off-chain storage interface for the
 bnbagent SDK. On-chain contracts store only content hashes; full data (service
 records, deliverables, metadata) lives off-chain. Implementations handle
 upload, download, and existence checks through a unified async API.
