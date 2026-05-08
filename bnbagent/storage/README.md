@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `storage_providers` module provides a pluggable off-chain storage interface for the
+The `storage` module provides a pluggable off-chain storage interface for the
 bnbagent SDK. On-chain contracts store only content hashes; full deliverable data lives
 off-chain. Implementations handle upload, download, and existence checks through a
 unified async API.
@@ -11,8 +11,8 @@ unified async API.
 
 | Provider | Import | When to use |
 |---|---|---|
-| `LocalStorageProvider` | `bnbagent.storage_providers` | Development / local testing |
-| `IPFSStorageProvider` | `bnbagent.storage_providers` | Production (Pinata-compatible IPFS) |
+| `LocalStorageProvider` | `bnbagent.storage` | Development / local testing |
+| `IPFSStorageProvider` | `bnbagent.storage` | Production (Pinata-compatible IPFS) |
 
 Custom backends: subclass `StorageProvider` and inject via `APEXConfig(storage=...)`.
 
@@ -20,7 +20,7 @@ Custom backends: subclass `StorageProvider` and inject via `APEXConfig(storage=.
 
 ```python
 # LocalStorageProvider — dev / local
-from bnbagent.storage_providers import LocalStorageProvider
+from bnbagent.storage import LocalStorageProvider
 
 storage = LocalStorageProvider("./my-data")
 url = await storage.upload({"key": "value"})          # returns "file://..."
@@ -30,7 +30,7 @@ url = await storage.upload({"key": "value"}, "job-1.json")
 storage = LocalStorageProvider.from_env()
 
 # IPFSStorageProvider — production (Pinata)
-from bnbagent.storage_providers import IPFSStorageProvider
+from bnbagent.storage import IPFSStorageProvider
 
 storage = IPFSStorageProvider(
     pinning_api_url="https://api.pinata.cloud/pinning/pinJSONToIPFS",
@@ -50,7 +50,7 @@ happens in the caller (e.g. the startup script), not in the SDK:
 
 ```python
 import os
-from bnbagent.storage_providers import LocalStorageProvider, IPFSStorageProvider
+from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
 from bnbagent.apex.config import APEXConfig
 
 storage_type = (os.getenv("STORAGE_PROVIDER") or "local").lower()
@@ -97,7 +97,7 @@ Async abstract base class. Subclass this to build a custom backend.
 Synchronous bridge for non-async callers. Runs `provider.upload()` via a new event loop.
 
 ```python
-from bnbagent.storage_providers import upload_sync, LocalStorageProvider
+from bnbagent.storage import upload_sync, LocalStorageProvider
 
 storage = LocalStorageProvider("./data")
 url = upload_sync(storage, {"job": {"id": 1}}, "job-1.json")
@@ -119,7 +119,7 @@ only that `upload()` returns a URL the client/voter can fetch (or that
 ```python
 import json
 import aiosqlite
-from bnbagent.storage_providers import StorageProvider
+from bnbagent.storage import StorageProvider
 from bnbagent.exceptions import StorageError
 
 class SQLiteStorageProvider(StorageProvider):

@@ -6,7 +6,7 @@ import pytest
 
 from bnbagent.apex.config import APEXConfig
 from bnbagent.apex.server.routes import create_apex_state
-from bnbagent.storage_providers.local_provider import LocalStorageProvider
+from bnbagent.storage.local_provider import LocalStorageProvider
 
 
 def _mock_wallet():

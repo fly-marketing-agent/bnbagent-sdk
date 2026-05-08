@@ -6,7 +6,7 @@ import stat
 import pytest
 
 from bnbagent.exceptions import StorageError
-from bnbagent.storage_providers.local_provider import LocalStorageProvider
+from bnbagent.storage.local_provider import LocalStorageProvider
 
 
 class TestLocalStorageProvider:
@@ -55,7 +55,7 @@ class TestLocalStorageProvider:
         assert mode & stat.S_IWUSR
 
     def test_upload_sync(self, tmp_path):
-        from bnbagent.storage_providers import upload_sync
+        from bnbagent.storage import upload_sync
         provider = LocalStorageProvider(str(tmp_path / "data"))
         url = upload_sync(provider, {"sync": True}, "sync-test.json")
         assert url.startswith("file://")

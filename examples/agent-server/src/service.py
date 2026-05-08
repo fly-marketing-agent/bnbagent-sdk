@@ -59,10 +59,10 @@ logger = logging.getLogger("blockchain_news")
 # any custom StorageProvider subclass without modifying the SDK itself.
 _storage_type = (os.getenv("STORAGE_PROVIDER") or "local").lower()
 if _storage_type == "ipfs":
-    from bnbagent.storage_providers import IPFSStorageProvider
+    from bnbagent.storage import IPFSStorageProvider
     _storage = IPFSStorageProvider.from_env()
 elif _storage_type == "local":
-    from bnbagent.storage_providers import LocalStorageProvider
+    from bnbagent.storage import LocalStorageProvider
     _storage = LocalStorageProvider.from_env()
 else:
     raise SystemExit(

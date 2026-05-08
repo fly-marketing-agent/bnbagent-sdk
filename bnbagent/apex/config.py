@@ -47,7 +47,7 @@ from ..config import NetworkConfig
 from ..core.config import AgentConfig, get_env
 
 if TYPE_CHECKING:
-    from ..storage_providers.storage_provider import StorageProvider
+    from ..storage.storage_provider import StorageProvider
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ class APEXConfig(AgentConfig):
                 )
 
         if storage is None:
-            from ..storage_providers import LocalStorageProvider
+            from ..storage import LocalStorageProvider
             storage = LocalStorageProvider.from_env()
 
         return cls(

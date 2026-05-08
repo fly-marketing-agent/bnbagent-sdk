@@ -12,7 +12,7 @@ Tier 2 (import from subpackage):
     from bnbagent.apex.server import create_apex_app, APEXJobOps
     from bnbagent.apex.config import APEXConfig
     from bnbagent.core import create_web3, load_erc20_abi
-    from bnbagent.storage_providers import LocalStorageProvider, IPFSStorageProvider
+    from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
 """
 
 from __future__ import annotations

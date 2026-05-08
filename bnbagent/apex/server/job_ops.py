@@ -23,7 +23,7 @@ from web3 import Web3
 
 from ...config import NetworkConfig
 from ...core.config import get_env
-from ...storage_providers.storage_provider import StorageProvider
+from ...storage.storage_provider import StorageProvider
 from ...wallets.wallet_provider import WalletProvider
 from ..client import APEXClient
 from ..config import APEX_ENV_PREFIX

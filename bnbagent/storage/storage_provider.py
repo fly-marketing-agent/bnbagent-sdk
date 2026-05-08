@@ -6,7 +6,7 @@ The chain only stores hashes; full data lives off-chain.
 
 The primary interface is **async** (upload, download, exists) because storage
 I/O (HTTP calls to IPFS pinning services, etc.) is naturally async.  For
-synchronous callers use ``bnbagent.storage_providers.upload_sync(provider, data)``.
+synchronous callers use ``bnbagent.storage.upload_sync(provider, data)``.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class StorageProvider(ABC):
 
     All core methods are async.  Use ``await upload()`` from async contexts
     (e.g. APEXJobOps).  For synchronous callers use
-    ``bnbagent.storage_providers.upload_sync(provider, data)``.
+    ``bnbagent.storage.upload_sync(provider, data)``.
 
     Built-in implementations (``LocalStorageProvider``, ``IPFSStorageProvider``)
     each provide a ``from_env()`` classmethod that reads their own env vars.

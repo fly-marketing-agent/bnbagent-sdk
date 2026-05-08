@@ -122,7 +122,7 @@ High-level facade over three contracts. Most callers only touch `APEXClient`.
 | `evm_wallet_provider.py` | `EVMWalletProvider` — Keystore V3 encryption (scrypt + AES-128-CTR) |
 | `mpc_wallet_provider.py` | `MPCWalletProvider` — stub for future MPC signer support |
 
-### `bnbagent/storage_providers/` — Storage Providers
+### `bnbagent/storage/` — Storage Providers
 
 | File | Purpose |
 |------|---------|
@@ -167,7 +167,7 @@ from bnbagent.apex import (
 )
 from bnbagent.apex.server import create_apex_app, APEXJobOps
 from bnbagent.apex.config import APEXConfig
-from bnbagent.storage_providers import LocalStorageProvider, IPFSStorageProvider
+from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
 ```
 
 ## Module System
