@@ -11,7 +11,8 @@ Tier 2 (import from subpackage):
     from bnbagent.erc8183 import CommerceClient, RouterClient, PolicyClient, NegotiationHandler
     from bnbagent.erc8183.server import create_erc8183_app, ERC8183JobOps
     from bnbagent.erc8183.config import ERC8183Config
-    from bnbagent.core import create_web3, load_erc20_abi
+    from bnbagent.core import create_web3
+    from bnbagent.erc20 import MinimalERC20Client, load_erc20_abi
     from bnbagent.storage import LocalStorageProvider, IPFSStorageProvider
 """
 

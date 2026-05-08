@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from web3 import Web3
 
 if TYPE_CHECKING:
-    from ..erc8004.models import AgentEndpoint
+    from .models import AgentEndpoint
 
 
 class AgentURIGenerator:
