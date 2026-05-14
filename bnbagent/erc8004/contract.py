@@ -7,6 +7,7 @@ Provides methods for registering agents and querying agent information.
 
 from __future__ import annotations
 
+import concurrent.futures as _cf
 import json
 import logging
 from pathlib import Path
@@ -94,6 +95,45 @@ class ContractInterface:
         except Exception as e:
             raise ValueError(f"Failed to load ABI from file {abi_file_path}: {str(e)}") from e
 
+    def _run_preflight(self, transaction: dict, description: str) -> None:
+        """Simulate the transaction via eth_call before broadcasting.
+
+        Surfaces revert reasons early without spending gas. Mirrors the same
+        pre-flight logic in core/contract_mixin.py:_send_tx().
+        """
+        call_params = {
+            "from": transaction.get("from"),
+            "to": transaction.get("to"),
+            "data": transaction.get("data", "0x"),
+            "value": transaction.get("value", 0),
+            "gas": transaction.get("gas", 2_000_000),
+        }
+        with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self.web3.eth.call, call_params)
+            try:
+                future.result(timeout=10)
+            except _cf.TimeoutError:
+                logger.warning(
+                    "[ContractInterface] Pre-flight eth_call timed out for %s, proceeding",
+                    description,
+                )
+            except Exception as preflight_err:
+                err_str = str(preflight_err)
+                if "'0x'" in err_str or err_str.strip().endswith(", '0x')"):
+                    logger.warning(
+                        "[ContractInterface] Pre-flight returned opaque 0x revert for %s, proceeding",
+                        description,
+                    )
+                else:
+                    logger.error(
+                        "[ContractInterface] Pre-flight revert for %s: %s",
+                        description,
+                        preflight_err,
+                    )
+                    raise RuntimeError(
+                        f"Transaction would revert: {preflight_err}"
+                    ) from preflight_err
+
     def _execute_transaction(
         self,
         function: ContractFunction,
@@ -137,6 +177,9 @@ class ContractInterface:
                 )
 
                 logger.debug(f"Building {description} transaction: {transaction}")
+
+                # Pre-flight simulation to surface revert reason before spending gas
+                self._run_preflight(transaction, description)
 
                 # Check if transaction is sponsorable
                 is_sponsorable = self.paymaster.isSponsorable(transaction)
@@ -185,6 +228,9 @@ class ContractInterface:
 
                 logger.debug(f"Building {description} transaction: {transaction}")
 
+                # Pre-flight simulation to surface revert reason before spending gas
+                self._run_preflight(transaction, description)
+
                 # Sign transaction via wallet provider
                 signed_txn = self.wallet_provider.sign_transaction(transaction)
                 signed_tx_hex = signed_txn["rawTransaction"].hex()
@@ -199,6 +245,16 @@ class ContractInterface:
 
             # Wait for receipt (always use Web3 for receipt waiting)
             receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+            if receipt["status"] == 0:
+                logger.error(
+                    "[ContractInterface] %s reverted on-chain: tx=%s block=%s gasUsed=%s",
+                    description,
+                    tx_hash_hex,
+                    receipt["blockNumber"],
+                    receipt["gasUsed"],
+                )
+                raise RuntimeError(f"Transaction reverted on-chain: {tx_hash_hex}")
 
             logger.debug(f"Transaction confirmed: {receipt}")
 
