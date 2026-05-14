@@ -8,20 +8,24 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from bnbagent.erc8004.contract import ContractInterface
+from tests.conftest import FAKE_ADDRESS, FAKE_CONTRACT_ADDRESS
 
 
 def _make_contract(web3=None, paymaster=None):
     """Build a ContractInterface with all heavy dependencies mocked."""
     if web3 is None:
         web3 = MagicMock()
+    # NonceManager keys singletons by (rpc_url, account) — give the mock a
+    # stable endpoint_uri so it doesn't fall back to id(provider).
+    web3.provider.endpoint_uri = "https://fake-rpc.example.com"
     wallet_provider = MagicMock()
-    wallet_provider.address = "0xDeadBeef"
+    wallet_provider.address = FAKE_ADDRESS
 
     with patch.object(ContractInterface, "_get_default_abi", return_value=[]):
         with patch("bnbagent.erc8004.contract.Web3.to_checksum_address", side_effect=lambda x: x):
             ci = ContractInterface(
                 web3=web3,
-                contract_address="0x1234",
+                contract_address=FAKE_CONTRACT_ADDRESS,
                 wallet_provider=wallet_provider,
                 paymaster=paymaster,
             )
@@ -258,3 +262,90 @@ class TestRegisterAgentPropagatesRevert:
 
         with pytest.raises(RuntimeError, match="Agent registration failed"):
             ci.register_agent(agent_uri="https://example.com/agent")
+
+
+class TestRetryAndNonceManagement:
+    """Web3 (non-paymaster) path must retry on nonce errors and 429s."""
+
+    def _setup_for_retry(self, web3=None):
+        if web3 is None:
+            web3 = MagicMock()
+        ci, web3, wallet_provider = _make_contract(web3=web3)
+        fn = MagicMock()
+        fn.estimate_gas.return_value = 100_000
+        fn.build_transaction.return_value = {
+            "from": FAKE_ADDRESS, "to": FAKE_CONTRACT_ADDRESS,
+            "data": "0x", "value": 0, "gas": 100_000,
+            "gasPrice": 3_000_000_000, "nonce": 1, "chainId": 97,
+        }
+        web3.eth.get_transaction_count.return_value = 1
+        web3.eth.gas_price = 3_000_000_000
+        web3.eth.chain_id = 97
+        web3.eth.call.return_value = b""
+
+        raw_bytes = b"\xab" * 32
+        signed = MagicMock()
+        signed.__getitem__ = lambda s, k: raw_bytes if k == "rawTransaction" else None
+        wallet_provider.sign_transaction.return_value = signed
+
+        sent_hash = b"\xab" * 32
+        ok_receipt = Mock()
+        ok_receipt.__getitem__ = lambda s, k: {
+            "status": 1, "blockNumber": 1, "gasUsed": 1,
+            "transactionHash": sent_hash,
+        }[k]
+        web3.eth.wait_for_transaction_receipt.return_value = ok_receipt
+        return ci, web3, wallet_provider, fn, sent_hash
+
+    def test_retries_on_nonce_too_low(self):
+        """Nonce-too-low error must trigger NonceManager re-sync and retry."""
+        ci, web3, wallet_provider, fn, sent_hash = self._setup_for_retry()
+        # First send fails with nonce error, second succeeds.
+        web3.eth.send_raw_transaction.side_effect = [
+            Exception("nonce too low"),
+            sent_hash,
+        ]
+        result = ci._execute_transaction(fn, description="retry-nonce")
+        assert web3.eth.send_raw_transaction.call_count == 2
+        assert "transactionHash" in result
+        # NonceManager re-syncs by calling get_transaction_count again.
+        assert web3.eth.get_transaction_count.call_count >= 2
+
+    def test_retries_on_rate_limit(self):
+        """429 must trigger exponential backoff and retry."""
+        ci, web3, wallet_provider, fn, sent_hash = self._setup_for_retry()
+        web3.eth.send_raw_transaction.side_effect = [
+            Exception("HTTP 429: too many requests"),
+            sent_hash,
+        ]
+        with patch("bnbagent.erc8004.contract.time.sleep") as mock_sleep:
+            result = ci._execute_transaction(fn, description="retry-429")
+        assert web3.eth.send_raw_transaction.call_count == 2
+        mock_sleep.assert_called_once()  # one backoff between the two attempts
+        assert "transactionHash" in result
+
+    def test_no_retry_on_unrelated_error(self):
+        """Generic non-retryable error must raise immediately and reset nonce cache."""
+        ci, web3, wallet_provider, fn, _ = self._setup_for_retry()
+        web3.eth.send_raw_transaction.side_effect = Exception("insufficient funds")
+        with pytest.raises(Exception, match="insufficient funds"):
+            ci._execute_transaction(fn, description="no-retry")
+        assert web3.eth.send_raw_transaction.call_count == 1
+
+    def test_uses_gas_price_buffer(self):
+        """Gas price must be 1.2x network value, floored at MIN_GAS_PRICE_WEI."""
+        ci, web3, wallet_provider, fn, sent_hash = self._setup_for_retry()
+        # Network reports 5 Gwei; expect tx to use ceil(5 * 1.2) = 6 Gwei.
+        web3.eth.gas_price = 5_000_000_000
+        web3.eth.send_raw_transaction.return_value = sent_hash
+        ci._execute_transaction(fn, description="gas-buffer")
+        build_kwargs = fn.build_transaction.call_args[0][0]
+        assert build_kwargs["gasPrice"] == 6_000_000_000
+
+    def test_send_raw_transaction_receives_bytes(self):
+        """send_raw_transaction must be called with bytes, not a hex string."""
+        ci, web3, wallet_provider, fn, sent_hash = self._setup_for_retry()
+        web3.eth.send_raw_transaction.return_value = sent_hash
+        ci._execute_transaction(fn, description="bytes-arg")
+        sent_arg = web3.eth.send_raw_transaction.call_args[0][0]
+        assert isinstance(sent_arg, bytes)
