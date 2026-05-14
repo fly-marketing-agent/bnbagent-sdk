@@ -53,7 +53,8 @@ class ERC8004Agent:
             wallet_provider: Wallet provider instance (required).
                             Use EVMWalletProvider for private key wallets,
                             or MPCWalletProvider for MPC wallets.
-            network: Network name. Currently only "bsc-testnet" is supported.
+            network: Network name ("bsc-testnet" or "bsc-mainnet"), or a
+                    :class:`NetworkConfig` instance for custom networks.
             debug: Enable debug logging (default: False)
 
         Raises:

@@ -112,7 +112,7 @@ Override with env vars when needed:
 | Network | Status | Chain ID | Registry Contract |
 |---------|--------|----------|-------------------|
 | BSC Testnet | **Active** | 97 | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
-| BSC Mainnet | Pending — contracts not yet deployed | 56 | -- |
+| BSC Mainnet | **Active** | 56 | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 
 ## Related
 

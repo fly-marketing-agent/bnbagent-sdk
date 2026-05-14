@@ -70,10 +70,12 @@ NETWORKS: dict[str, NetworkConfig] = {
         name="bsc-mainnet",
         chain_id=56,
         rpc_url="https://bsc-dataseed.binance.org",
-        registry_contract="",  # TBD
-        commerce_contract="",  # TBD
-        router_contract="",  # TBD
-        policy_contract="",  # TBD
+        paymaster_url="https://bsc-megafuel.nodereal.io/",
+        use_paymaster=True,
+        registry_contract="0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+        commerce_contract="0xea4daa3100a767e86fded867729ae7446476eba6",
+        router_contract="0x51895229e12f9876011789b04f8698af06ccd6da",
+        policy_contract="0x9c01845705b3078aa2e8cff7520a6376fd766de5",
     ),
 }
 

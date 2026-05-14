@@ -196,7 +196,7 @@ my_module = "my_package:create_module"
 ```
 NetworkConfig (NETWORKS dict in config.py)
   ├── bsc-testnet  (chain_id=97)  — active, ERC-8183 + ERC-8004 deployed
-  └── bsc-mainnet  (chain_id=56)  — placeholder, contracts pending
+  └── bsc-mainnet  (chain_id=56)  — active, ERC-8183 + ERC-8004 deployed
 
 resolve_network(name) + env var overrides
   ↓
