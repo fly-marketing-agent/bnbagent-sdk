@@ -89,10 +89,15 @@ def create_erc8183_state(config: ERC8183Config | None = None) -> ERC8183State:
     except Exception as exc:
         logger.warning(f"[ERC-8183] payment_token lookup failed: {exc}")
 
+    # Bind the negotiation signature to this chain + commerce contract so the
+    # provider_sig cannot be replayed across networks. Pulls both fields from
+    # the live ERC-8183 client to avoid duplicating network config here.
     negotiation_handler = NegotiationHandler(
         service_price=config.service_price,
         currency=currency,
         wallet_provider=config.wallet_provider,
+        chain_id=job_ops.erc8183_client.network.chain_id,
+        verifying_contract=job_ops.erc8183_client.commerce.address,
     )
 
     return ERC8183State(

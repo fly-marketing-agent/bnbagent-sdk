@@ -94,6 +94,17 @@ class ERC8183Client:
         self.network = nc
         self.w3 = create_web3(nc.rpc_url)
 
+        # Defense-in-depth: refuse to operate when the RPC serves a different
+        # chain than the NetworkConfig claims. Prevents wrong-chain signing
+        # when RPC_URL is misconfigured or maliciously redirected.
+        actual_chain_id = self.w3.eth.chain_id
+        if actual_chain_id != nc.chain_id:
+            raise ValueError(
+                f"RPC chain_id mismatch for network '{nc.name}': "
+                f"expected {nc.chain_id}, got {actual_chain_id}. "
+                f"The RPC at {nc.rpc_url} is serving a different chain."
+            )
+
         self._wallet_provider = wallet_provider
         self.address: str = wallet_provider.address
 

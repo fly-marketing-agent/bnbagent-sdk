@@ -563,3 +563,201 @@ class TestNegotiationHandler:
             wallet_provider=mock_wallet,
         )
         assert handler._wallet_provider is mock_wallet
+
+
+class TestNegotiationSignatureBinding:
+    """Verify chain_id + verifying_contract are embedded in the signed content
+    so provider_sig cannot be replayed across EVM chains (audit I01)."""
+
+    def _make_handler(self, **kwargs):
+        defaults = dict(
+            service_price="20000000000000000000",
+            currency="0xc70B8741B8B07A6d61E54fd4B20f22Fa648E5565",
+        )
+        defaults.update(kwargs)
+        return NegotiationHandler(**defaults)
+
+    def _request(self):
+        return {
+            "task_description": "Get news",
+            "terms": {"deliverables": "summary", "quality_standards": "accurate"},
+        }
+
+    def test_content_includes_chain_id_when_set(self):
+        from bnbagent.erc8183.negotiation import _build_description_content
+
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+        handler = self._make_handler(wallet_provider=mock_wallet, chain_id=56)
+        result = handler.negotiate(self._request())
+
+        content = _build_description_content(result.to_dict(), chain_id=56)
+        assert content["chain_id"] == 56
+        # And the negotiation_hash must be derived from the chain-bound content.
+        from web3 import Web3
+        canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
+        expected = "0x" + Web3.keccak(text=canonical).hex().lstrip("0x")
+        assert result.negotiation_hash.lstrip("0x") == expected.lstrip("0x")
+
+    def test_content_includes_verifying_contract_when_set(self):
+        from web3 import Web3
+        from bnbagent.erc8183.negotiation import _build_description_content
+
+        commerce_addr = Web3.to_checksum_address("0xa206c0517b6371c6638cd9e4a42cc9f02a33b0de")
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+        handler = self._make_handler(
+            wallet_provider=mock_wallet,
+            chain_id=97,
+            verifying_contract=commerce_addr,
+        )
+        result = handler.negotiate(self._request())
+
+        content = _build_description_content(
+            result.to_dict(), chain_id=97, verifying_contract=commerce_addr,
+        )
+        assert content["verifying_contract"] == commerce_addr  # checksummed
+        # Hash binds the contract too.
+        canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
+        expected = "0x" + Web3.keccak(text=canonical).hex().lstrip("0x")
+        assert result.negotiation_hash.lstrip("0x") == expected.lstrip("0x")
+
+    def test_content_omits_fields_when_not_set(self):
+        from bnbagent.erc8183.negotiation import _build_description_content
+
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+        handler = self._make_handler(wallet_provider=mock_wallet)
+        result = handler.negotiate(self._request())
+
+        content = _build_description_content(result.to_dict())
+        assert "chain_id" not in content
+        assert "verifying_contract" not in content
+
+    def test_different_chain_id_produces_different_signature(self):
+        """Same negotiation on different chains must yield different hashes."""
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+
+        h_testnet = self._make_handler(
+            wallet_provider=mock_wallet, chain_id=97,
+        ).negotiate(self._request()).negotiation_hash
+        h_mainnet = self._make_handler(
+            wallet_provider=mock_wallet, chain_id=56,
+        ).negotiate(self._request()).negotiation_hash
+
+        assert h_testnet != h_mainnet
+
+    def test_from_erc8183_client_populates_chain_id_and_contract(self):
+        mock_client = MagicMock()
+        mock_client.payment_token = "0xTokenAddr"
+        mock_client.network.chain_id = 97
+        mock_client.commerce.address = "0xa206c0517B6371c6638cD9E4A42cC9F02A33B0de"
+
+        handler = NegotiationHandler.from_erc8183_client(
+            erc8183_client=mock_client,
+            service_price="20000000000000000000",
+        )
+        assert handler._chain_id == 97
+        assert handler._verifying_contract == "0xa206c0517B6371c6638cD9E4A42cC9F02A33B0de"
+
+    def test_wallet_without_chain_id_logs_warning(self, caplog):
+        with caplog.at_level("WARNING"):
+            self._make_handler(wallet_provider=MagicMock())
+        assert "chain_id is None" in caplog.text
+
+
+class TestChainBindingRoundtrip:
+    """End-to-end: signed negotiation_hash MUST be reproducible from the
+    on-chain job.description string, otherwise provider_sig is unverifiable."""
+
+    def _make_handler(self, **kwargs):
+        defaults = dict(
+            service_price="20000000000000000000",
+            currency="0xc70B8741B8B07A6d61E54fd4B20f22Fa648E5565",
+        )
+        defaults.update(kwargs)
+        return NegotiationHandler(**defaults)
+
+    def test_build_job_description_includes_chain_id_when_present(self):
+        from web3 import Web3
+        commerce_addr = Web3.to_checksum_address(
+            "0xa206c0517b6371c6638cd9e4a42cc9f02a33b0de"
+        )
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+        handler = self._make_handler(
+            wallet_provider=mock_wallet, chain_id=56, verifying_contract=commerce_addr,
+        )
+        result = handler.negotiate({
+            "task_description": "Get news",
+            "terms": {"deliverables": "summary", "quality_standards": "accurate"},
+        })
+
+        description_json = build_job_description(result.to_dict())
+        parsed = json.loads(description_json)
+        assert parsed["chain_id"] == 56
+        assert parsed["verifying_contract"] == commerce_addr
+
+    def test_signature_roundtrip_with_chain_binding(self):
+        """The hash signed by negotiate() must match the hash a verifier would
+        compute by stripping negotiation_hash/provider_sig from the on-chain
+        JSON and re-running keccak. Without this, provider_sig is useless."""
+        from web3 import Web3
+        commerce_addr = Web3.to_checksum_address(
+            "0xa206c0517b6371c6638cd9e4a42cc9f02a33b0de"
+        )
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.return_value = {"signature": b"\xab" * 65}
+        handler = self._make_handler(
+            wallet_provider=mock_wallet, chain_id=97, verifying_contract=commerce_addr,
+        )
+        result = handler.negotiate({
+            "task_description": "Get news",
+            "terms": {"deliverables": "summary", "quality_standards": "accurate"},
+        })
+
+        # Simulate downstream verifier:
+        description_json = build_job_description(result.to_dict())
+        parsed = json.loads(description_json)
+        # Strip non-content fields, exactly as a verifier would.
+        parsed.pop("negotiation_hash", None)
+        parsed.pop("provider_sig", None)
+        canonical = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
+        recomputed = "0x" + Web3.keccak(text=canonical).hex().lstrip("0x")
+
+        assert recomputed.lstrip("0x") == result.negotiation_hash.lstrip("0x"), (
+            "On-chain description must hash to the same value that provider_sig "
+            "signed; otherwise ecrecover-based verification will fail."
+        )
+
+
+class TestSigningFailureLogging:
+    """Audit I03: signing failures must produce a log entry."""
+
+    def _make_handler(self, **kwargs):
+        defaults = dict(
+            service_price="20000000000000000000",
+            currency="0xc70B8741B8B07A6d61E54fd4B20f22Fa648E5565",
+        )
+        defaults.update(kwargs)
+        return NegotiationHandler(**defaults)
+
+    def test_signing_failure_is_logged(self, caplog):
+        mock_wallet = MagicMock()
+        mock_wallet.sign_message.side_effect = RuntimeError("hardware key offline")
+        handler = self._make_handler(wallet_provider=mock_wallet, chain_id=97)
+
+        with caplog.at_level("WARNING"):
+            result = handler.negotiate({
+                "task_description": "Get news",
+                "terms": {"deliverables": "summary", "quality_standards": "accurate"},
+            })
+
+        # Quote still returned but without sig.
+        assert result.accepted is True
+        assert result.negotiation_hash == ""
+        assert result.provider_sig == ""
+        # The failure must be visible to operators.
+        assert "sign_message failed" in caplog.text
+        assert "hardware key offline" in caplog.text

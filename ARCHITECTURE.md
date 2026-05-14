@@ -199,7 +199,7 @@ NetworkConfig (NETWORKS dict in config.py)
   └── bsc-mainnet  (chain_id=56)  — active, ERC-8183 + ERC-8004 deployed
 
 resolve_network(name) + env var overrides
-  ↓
+  ↓ (clients assert w3.eth.chain_id == nc.chain_id at init — wrong RPC → ValueError)
 BNBAgentConfig
   ├── wallet_provider  (explicit or auto-wrapped from private_key)
   ├── settings         (general key-value)

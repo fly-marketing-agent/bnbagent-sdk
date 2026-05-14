@@ -102,6 +102,19 @@ class ERC8004Agent:
         if not self.web3.is_connected():
             raise ConnectionError(f"Failed to connect to RPC: {rpc_url}")
 
+        # Defense-in-depth: refuse to operate when the RPC serves a different
+        # chain than the NetworkConfig claims. Prevents wrong-chain signing
+        # when RPC_URL is misconfigured or maliciously redirected.
+        expected_chain_id = self._network_config.get("chain_id")
+        if expected_chain_id is not None:
+            actual_chain_id = self.web3.eth.chain_id
+            if actual_chain_id != expected_chain_id:
+                raise ValueError(
+                    f"RPC chain_id mismatch for network '{network_name}': "
+                    f"expected {expected_chain_id}, got {actual_chain_id}. "
+                    f"The RPC at {rpc_url} is serving a different chain."
+                )
+
         logger.debug(f"Connected to blockchain: {rpc_url}")
 
         # Use provided wallet provider

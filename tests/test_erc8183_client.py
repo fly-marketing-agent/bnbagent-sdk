@@ -82,6 +82,13 @@ class TestInit:
     def test_address_comes_from_wallet(self, facade):
         assert facade.address == FAKE_ADDRESS
 
+    def test_chain_id_mismatch_raises(self, mock_web3):
+        """RPC reporting a different chain_id must hard-fail at init (audit L06)."""
+        mock_web3.eth.chain_id = 99999  # not 12345 from _fake_network()
+        with patch("bnbagent.erc8183.client.create_web3", return_value=mock_web3):
+            with pytest.raises(ValueError, match="chain_id mismatch"):
+                ERC8183Client(_mock_wallet(), network=_fake_network())
+
     def test_accepts_network_string(self, mock_web3):
         """String preset is resolved via ``resolve_network`` under the hood."""
         fake_net = _fake_network()

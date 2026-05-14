@@ -36,9 +36,12 @@ UMA dispute voters read job.description verbatim from the assertion claim.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .client import ERC8183Client
@@ -289,6 +292,8 @@ class NegotiationResult:
     response_hash: str
     negotiation_hash: str = ""
     provider_sig: str = ""
+    chain_id: int | None = None
+    verifying_contract: str | None = None
 
     @property
     def accepted(self) -> bool:
@@ -307,6 +312,10 @@ class NegotiationResult:
             result["negotiation_hash"] = self.negotiation_hash
         if self.provider_sig:
             result["provider_sig"] = self.provider_sig
+        if self.chain_id is not None:
+            result["chain_id"] = self.chain_id
+        if self.verifying_contract is not None:
+            result["verifying_contract"] = self.verifying_contract
         return result
 
 
@@ -326,12 +335,21 @@ def _sanitize_for_claim(s: str) -> str:
     return result
 
 
-def _build_description_content(negotiation_result: dict) -> dict:
+def _build_description_content(
+    negotiation_result: dict,
+    chain_id: int | None = None,
+    verifying_contract: str | None = None,
+) -> dict:
     """
     Extract and sanitize the signable content from a negotiation result dict.
 
     Returns the content dict (without negotiation_hash and provider_sig) that
     is used as input to keccak256 for the negotiation_hash.
+
+    When ``chain_id`` and/or ``verifying_contract`` are provided, they are
+    embedded in the content so the resulting signature is bound to a specific
+    chain + commerce contract. This prevents replaying the same ``provider_sig``
+    across EVM networks where the same provider key is configured.
     """
     response = negotiation_result.get("response", {})
     request = negotiation_result.get("request", {})
@@ -370,6 +388,12 @@ def _build_description_content(negotiation_result: dict) -> dict:
     }
     if quote_expires_at is not None:
         content["quote_expires_at"] = quote_expires_at
+    if chain_id is not None:
+        content["chain_id"] = chain_id
+    if verifying_contract is not None:
+        from web3 import Web3
+
+        content["verifying_contract"] = Web3.to_checksum_address(verifying_contract)
 
     return content
 
@@ -396,7 +420,16 @@ def build_job_description(negotiation_result: dict, max_length: int = 2000) -> s
     Raises:
         ValueError: If the negotiation was not accepted or required fields are missing.
     """
-    content = _build_description_content(negotiation_result)
+    # Propagate chain_id / verifying_contract from the result so the on-chain
+    # description string contains the SAME fields that were keccak'd to produce
+    # negotiation_hash. Without this, downstream verifiers that re-derive the
+    # hash from the on-chain JSON would always get a different value than what
+    # provider_sig actually signed.
+    content = _build_description_content(
+        negotiation_result,
+        chain_id=negotiation_result.get("chain_id"),
+        verifying_contract=negotiation_result.get("verifying_contract"),
+    )
 
     # Append negotiation_hash and provider_sig from the result
     negotiation_hash = negotiation_result.get("negotiation_hash", "")
@@ -472,6 +505,8 @@ class NegotiationHandler:
         require_quality_standards: bool = True,
         wallet_provider: WalletProvider | None = None,
         quote_ttl_seconds: int = 300,
+        chain_id: int | None = None,
+        verifying_contract: str | None = None,
     ):
         """
         Initialize the negotiation handler.
@@ -487,6 +522,13 @@ class NegotiationHandler:
             quote_ttl_seconds: How long the price quote is valid (default: 300s).
                                Capped at MAX_QUOTE_TTL_SECONDS so leaked / replayed
                                provider_sig values cannot accumulate value over time.
+            chain_id: When set, embedded in the signed content so the signature
+                      is bound to a specific chain. Prevents cross-chain replay
+                      when the same provider key is configured on multiple EVMs.
+            verifying_contract: When set, embedded in the signed content to bind
+                                the signature to a specific commerce contract.
+                                Use :meth:`from_erc8183_client` to auto-populate
+                                both fields from a live ERC-8183 client.
         """
         if not isinstance(quote_ttl_seconds, int) or isinstance(quote_ttl_seconds, bool):
             raise ValueError(
@@ -504,6 +546,15 @@ class NegotiationHandler:
         self._require_quality_standards = require_quality_standards
         self._wallet_provider = wallet_provider
         self._quote_ttl_seconds = quote_ttl_seconds
+        self._chain_id = chain_id
+        self._verifying_contract = verifying_contract
+
+        if wallet_provider is not None and chain_id is None:
+            logger.warning(
+                "[NegotiationHandler] wallet_provider is set but chain_id is None; "
+                "provider_sig will not be bound to a specific chain. "
+                "Pass chain_id (or use from_erc8183_client) to prevent cross-chain replay."
+            )
 
     @classmethod
     def from_erc8183_client(
@@ -549,6 +600,8 @@ class NegotiationHandler:
             require_quality_standards=require_quality_standards,
             wallet_provider=wallet_provider,
             quote_ttl_seconds=quote_ttl_seconds,
+            chain_id=erc8183_client.network.chain_id,
+            verifying_contract=erc8183_client.commerce.address,
         )
 
     @staticmethod
@@ -627,7 +680,11 @@ class NegotiationHandler:
             try:
                 from web3 import Web3
 
-                content = _build_description_content(partial_dict)
+                content = _build_description_content(
+                    partial_dict,
+                    chain_id=self._chain_id,
+                    verifying_contract=self._verifying_contract,
+                )
                 canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
                 h = Web3.keccak(text=canonical).hex()
                 negotiation_hash = h if h.startswith("0x") else "0x" + h
@@ -641,14 +698,27 @@ class NegotiationHandler:
                 )
                 if provider_sig and not provider_sig.startswith("0x"):
                     provider_sig = "0x" + provider_sig
-            except Exception:
-                # Signing failure is non-fatal; proceed without sig
+            except Exception as e:
+                # Signing failure is non-fatal: return the quote without a
+                # provider_sig, but log so operators can detect wallet issues.
+                logger.warning(
+                    "[NegotiationHandler] sign_message failed: %s; "
+                    "returning quote without provider_sig",
+                    e,
+                )
                 negotiation_hash = ""
                 provider_sig = ""
 
         # Store negotiated_at in the response dict for build_job_description
         response_dict = response.to_dict()
         response_dict["negotiated_at"] = now
+
+        # Echo chain_id / verifying_contract into the result so build_job_description
+        # writes them into the on-chain JSON. Without this, the on-chain description
+        # would lack the fields that negotiation_hash was computed over, and
+        # downstream verifiers couldn't reconstruct the signed digest.
+        bound_chain_id = self._chain_id if negotiation_hash else None
+        bound_contract = self._verifying_contract if negotiation_hash else None
 
         return NegotiationResult(
             request=req.to_dict(),
@@ -657,6 +727,8 @@ class NegotiationHandler:
             response_hash=response_hash,
             negotiation_hash=negotiation_hash,
             provider_sig=provider_sig,
+            chain_id=bound_chain_id,
+            verifying_contract=bound_contract,
         )
 
     def _reject(
