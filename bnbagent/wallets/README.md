@@ -40,7 +40,7 @@ print(wallet.address)
 # In-memory only (no disk I/O — used by config auto-wrap)
 wallet = EVMWalletProvider(password="pw", private_key="0x...", persist=False)
 
-# Auto-generate a new wallet (persisted to .bnbagent_state)
+# Auto-generate a new wallet (persisted to ~/.bnbagent/wallets/<address>.json)
 wallet = EVMWalletProvider(password="secure-pw")
 ```
 

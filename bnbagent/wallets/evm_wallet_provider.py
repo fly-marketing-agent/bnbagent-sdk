@@ -175,9 +175,6 @@ class EVMWalletProvider(WalletProvider):
                     "Set WALLET_ADDRESS to specify which one to use."
                 )
             else:
-                # Check for legacy .bnbagent_state in CWD and migrate
-                if self._try_migrate_legacy():
-                    return
                 self._create_wallet()
 
     def _load_keystore(self, address: str) -> None:
@@ -236,58 +233,6 @@ class EVMWalletProvider(WalletProvider):
             raise
 
         logger.debug("Saved keystore: %s", ks_path)
-
-    # ── Legacy migration ──
-
-    def _try_migrate_legacy(self) -> bool:
-        """Migrate .bnbagent_state (CWD) to ~/.bnbagent/wallets/. Returns True if migrated."""
-        legacy_path = Path.cwd() / ".bnbagent_state"
-        if not legacy_path.is_file():
-            return False
-
-        try:
-            with open(legacy_path) as f:
-                data = json.load(f)
-
-            keystore = data.get("keystore")
-            if keystore:
-                private_key = Account.decrypt(keystore, self._password)
-            else:
-                pk_hex = data.get("private_key", "")
-                if not pk_hex:
-                    return False
-                if pk_hex.startswith("0x"):
-                    pk_hex = pk_hex[2:]
-                private_key = bytes.fromhex(pk_hex)
-
-            self._account = Account.from_key(private_key)
-            self._source = "loaded_keystore"
-            self._save_keystore()
-
-            # Best-effort secure erase: overwrite the legacy file with zero
-            # bytes before unlink so the plaintext key blocks become harder
-            # to recover via filesystem carving. (Modern fs / SSD can still
-            # retain copies via journals or wear-levelling; this raises the
-            # bar without claiming forensic-grade erasure.)
-            try:
-                file_size = legacy_path.stat().st_size
-                legacy_path.write_bytes(b"\x00" * file_size)
-            except OSError as exc:
-                logger.warning(
-                    "Failed to overwrite %s before deletion (proceeding): %s",
-                    legacy_path,
-                    exc,
-                )
-            legacy_path.unlink()
-            logger.info(
-                "Migrated wallet from .bnbagent_state to %s/%s.json",
-                self._wallets_dir,
-                self._account.address,
-            )
-            return True
-        except Exception as e:
-            logger.warning("Failed to migrate legacy .bnbagent_state: %s", e)
-            return False
 
     # ── Public API ──
 

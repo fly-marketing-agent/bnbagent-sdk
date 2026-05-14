@@ -387,7 +387,7 @@ Transaction signing is abstracted behind the `WalletProvider` ABC (`address`, `s
 - Persistent mode (`persist=True`, default) — keystore at `~/.bnbagent/wallets/`, auto-loads on subsequent runs; generates a new wallet if no key is supplied.
 - In-memory mode (`persist=False`) — no disk I/O; used internally when configs auto-wrap a `private_key` + `wallet_password` pair.
 - Auto-wrap — `BNBAgentConfig`/`ERC8183Config` accept `private_key=` directly and wrap it into `EVMWalletProvider(persist=False)` in `__post_init__`, immediately zeroing the plaintext field.
-- Keystores written with `0o600` permissions; legacy plaintext state migrated to Keystore V3 on first load.
+- Keystores written with `0o600` permissions (directory `0o700`).
 
 **Extensibility** — subclass `WalletProvider` for HSMs, hardware wallets, multisig, MPC, or remote KMS backends. Inject via `wallet_provider=` on any config or client. `MPCWalletProvider` ships as a stub placeholder.
 
