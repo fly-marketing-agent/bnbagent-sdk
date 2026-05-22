@@ -329,7 +329,7 @@ def test_permit_unbounded_types_contents():
     )
 
 
-# ── Serialization (v0.4.0 polish) ────────────────────────────────────────
+# ── Serialization ────────────────────────────────────────────────────────
 
 
 def test_to_dict_returns_sorted_deterministic_output():
@@ -374,7 +374,7 @@ def test_from_dict_rejects_malformed_domain_entry():
         SigningPolicy.from_dict({"domain_allowlist": ["not-a-pair"]})
 
 
-# ── __str__ (v0.4.0 polish) ──────────────────────────────────────────────
+# ── __str__ ──────────────────────────────────────────────────────────────
 
 
 def test_str_contains_canonical_sections():
@@ -395,7 +395,7 @@ def test_str_handles_empty_policy_cleanly():
     assert "(any)" in s
 
 
-# ── permissive() env guard (v0.4.0 polish) ──────────────────────────────
+# ── permissive() env guard ──────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("env_value", ["prod", "production", "live", "mainnet-prod",

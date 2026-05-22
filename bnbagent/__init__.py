@@ -6,8 +6,8 @@ Tier 1 (public API — available via ``from bnbagent import ...``):
     ERC8004Agent, AgentEndpoint
     WalletProvider, EVMWalletProvider
     ERC8183Client, JobStatus, Verdict
-    SigningPolicy, PolicyViolation  (0.4.0+)
-    X402Signer                       (0.4.0+)
+    SigningPolicy, PolicyViolation
+    X402Signer
 
 Tier 2 (import from subpackage):
     from bnbagent.erc8183 import CommerceClient, RouterClient, PolicyClient, NegotiationHandler
@@ -41,10 +41,10 @@ from .main import BNBAgent
 # Wallets
 from .wallets import EVMWalletProvider, WalletProvider
 
-# Signing policy (0.4.0+)
+# Signing policy
 from .signing import PolicyViolation, SigningPolicy
 
-# x402 payment signer (0.4.0+)
+# x402 payment signer
 from .x402 import X402Signer
 
 from ._version import __version__
@@ -64,9 +64,9 @@ __all__ = [
     "ERC8183Client",
     "JobStatus",
     "Verdict",
-    # Signing policy (0.4.0+)
+    # Signing policy
     "SigningPolicy",
     "PolicyViolation",
-    # x402 payment signer (0.4.0+)
+    # x402 payment signer
     "X402Signer",
 ]

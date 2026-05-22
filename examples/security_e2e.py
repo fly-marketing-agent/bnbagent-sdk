@@ -1,4 +1,4 @@
-"""End-to-end security validation for SDK 0.4.0 SigningPolicy + X402Signer.
+"""End-to-end security validation for SigningPolicy + X402Signer.
 
 Run this script after any change to the signing layer. It does NOT send any
 transaction — purely off-chain sign / recover round-trips. The 6 assertions
@@ -6,7 +6,7 @@ exercise the canonical defense matrix on BSC testnet's real U-token EIP-712
 domain.
 
 Prerequisites:
-    pip install -e .  # SDK 0.4.0 installed in the current env
+    pip install -e .  # SDK installed in the current env
 
 Usage:
     python examples/security_e2e.py

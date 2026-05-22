@@ -452,7 +452,7 @@ Payment token address is read from `commerce.paymentToken()` at runtime.
 - **Non-pausable refund** — `claimRefund` on the kernel is intentionally not pausable and not hookable: funds can always be reclaimed past `expiredAt`.
 - **Storage permissions** — `LocalStorageProvider` uses `0600`/`0700`.
 
-### EIP-712 typed-data signing (`SigningPolicy`, 0.4.0+)
+### EIP-712 typed-data signing (`SigningPolicy`)
 
 `EVMWalletProvider.sign_typed_data` is **policy-gated by default**. Without
 explicit configuration, the wallet only accepts EIP-3009
