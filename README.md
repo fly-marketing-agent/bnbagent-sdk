@@ -517,9 +517,7 @@ wallet = EVMWalletProvider(
 
 **Capability model:** registered agent tool functions must never close over
 a raw `WalletProvider` — they should receive an `X402Signer` (or any other
-scoped wrapper) instead. The `tools/lint_capability.py` script flags files
-that import `WalletProvider`/`EVMWalletProvider`/`MPCWalletProvider` and
-also define `@tool`/`@agent.tool` functions.
+scoped wrapper) instead.
 
 **Tests-only escape:** `SigningPolicy.permissive()` disables all gates and
 logs a WARNING; `EVMWalletProvider._DANGEROUS_sign_typed_data_no_policy()`
