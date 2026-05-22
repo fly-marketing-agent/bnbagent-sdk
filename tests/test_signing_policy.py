@@ -327,3 +327,102 @@ def test_permit_unbounded_types_contents():
     assert PERMIT_UNBOUNDED_TYPES == frozenset(
         {"Permit", "PermitSingle", "PermitBatch"}
     )
+
+
+# ── Serialization (v0.4.0 polish) ────────────────────────────────────────
+
+
+def test_to_dict_returns_sorted_deterministic_output():
+    p = SigningPolicy.strict_default()
+    d = p.to_dict()
+    # Each list should be sorted (deterministic output for diff-friendly storage)
+    assert d["domain_allowlist"] == sorted(d["domain_allowlist"])
+    assert d["primary_type_allowlist"] == sorted(d["primary_type_allowlist"])
+    # frozensets become lists
+    assert isinstance(d["domain_allowlist"], list)
+    assert isinstance(d["primary_type_allowlist"], list)
+    # nested tuples become nested lists (TOML/JSON friendly)
+    assert all(isinstance(pair, list) and len(pair) == 2 for pair in d["domain_allowlist"])
+
+
+def test_from_dict_round_trips_strict_default():
+    p = SigningPolicy.strict_default()
+    p2 = SigningPolicy.from_dict(p.to_dict())
+    assert p == p2
+
+
+def test_from_dict_round_trips_extended():
+    p = SigningPolicy.strict_default().extend(
+        domain_allowlist={(1, "0x" + "9" * 40)},
+        primary_type_allowlist={"MyOrder"},
+        max_validity_window_seconds=300,
+    )
+    p2 = SigningPolicy.from_dict(p.to_dict())
+    assert p == p2
+
+
+def test_from_dict_handles_missing_keys_with_defaults():
+    p = SigningPolicy.from_dict({})
+    assert p.domain_allowlist == frozenset()
+    assert p.max_validity_window_seconds == 600
+    assert p.max_future_validity_seconds == 900
+    assert p.allow_unknown_domain is False
+
+
+def test_from_dict_rejects_malformed_domain_entry():
+    with pytest.raises(ValueError, match=r"domain_allowlist\[0\]"):
+        SigningPolicy.from_dict({"domain_allowlist": ["not-a-pair"]})
+
+
+# ── __str__ (v0.4.0 polish) ──────────────────────────────────────────────
+
+
+def test_str_contains_canonical_sections():
+    p = SigningPolicy.strict_default()
+    s = str(p)
+    assert "SigningPolicy(" in s
+    assert "domain_allowlist (2 entries)" in s
+    assert "TransferWithAuthorization" in s
+    assert "Permit" in s
+    assert "allow_unknown_domain=False" in s
+
+
+def test_str_handles_empty_policy_cleanly():
+    p = SigningPolicy(domain_allowlist=frozenset())
+    s = str(p)
+    assert "(none)" in s
+    # primary_type allowlist empty → "(any)" marker for "no whitelist applied"
+    assert "(any)" in s
+
+
+# ── permissive() env guard (v0.4.0 polish) ──────────────────────────────
+
+
+@pytest.mark.parametrize("env_value", ["prod", "production", "live", "mainnet-prod",
+                                       "PROD", " Production ", "LIVE"])
+def test_permissive_refuses_in_production(monkeypatch, env_value):
+    monkeypatch.setenv("ENV", env_value)
+    with pytest.raises(RuntimeError, match="indicates production"):
+        SigningPolicy.permissive()
+
+
+@pytest.mark.parametrize("env_value", ["", "dev", "development", "test", "staging", "qa"])
+def test_permissive_allowed_in_non_production(monkeypatch, env_value):
+    monkeypatch.setenv("ENV", env_value)
+    p = SigningPolicy.permissive()
+    assert p.allow_unknown_domain is True
+
+
+def test_permissive_break_glass_in_production(monkeypatch):
+    """allow_in_production=True bypasses the guard but still logs WARN."""
+    monkeypatch.setenv("ENV", "production")
+    p = SigningPolicy.permissive(allow_in_production=True)
+    assert p.allow_unknown_domain is True
+
+
+def test_permissive_reads_environment_var_fallback(monkeypatch):
+    """Falls back to ENVIRONMENT when ENV is unset."""
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "prod")
+    with pytest.raises(RuntimeError, match="indicates production"):
+        SigningPolicy.permissive()

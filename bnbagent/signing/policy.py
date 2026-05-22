@@ -19,6 +19,7 @@ Design references:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -124,16 +125,43 @@ class SigningPolicy:
             allow_unknown_domain=False,
         )
 
+    #: Environment values (case-insensitive) that block ``permissive()``
+    #: construction unless the caller passes ``allow_in_production=True``.
+    PRODUCTION_ENV_MARKERS: frozenset[str] = frozenset({
+        "prod", "production", "live", "mainnet-prod",
+    })
+
     @classmethod
-    def permissive(cls) -> "SigningPolicy":
+    def permissive(cls, *, allow_in_production: bool = False) -> "SigningPolicy":
         """⚠️ Testing-only escape: allow_unknown_domain=True and empty deny/allow.
 
-        Logs a WARNING on construction so accidental production use is
-        visible in logs. Never use this in agent-reachable code.
+        Refuses to construct when ``ENV`` or ``ENVIRONMENT`` env vars indicate
+        a production-class environment (case-insensitive match against
+        :attr:`PRODUCTION_ENV_MARKERS`: ``prod`` / ``production`` / ``live`` /
+        ``mainnet-prod``). Pass ``allow_in_production=True`` for break-glass
+        scenarios where you understand the consequences.
+
+        Logs a WARNING on construction (always — even outside production) so
+        the bypass shows up in audit grep. Never use this in agent-reachable
+        code paths.
+
+        Raises:
+            RuntimeError: When env indicates production and
+                ``allow_in_production`` is not set.
         """
+        env_raw = os.environ.get("ENV") or os.environ.get("ENVIRONMENT") or ""
+        env = env_raw.strip().lower()
+        if env in cls.PRODUCTION_ENV_MARKERS and not allow_in_production:
+            raise RuntimeError(
+                f"SigningPolicy.permissive() refused: ENV={env_raw!r} indicates "
+                f"production (matches {sorted(cls.PRODUCTION_ENV_MARKERS)}). "
+                f"Pass allow_in_production=True if this is intentional (e.g. "
+                f"break-glass)."
+            )
         logger.warning(
             "SigningPolicy.permissive() in use — POLICY DISABLED. "
-            "This bypasses ALL signing guards; only acceptable in tests."
+            "This bypasses ALL signing guards; only acceptable in tests. "
+            "(env=%r, allow_in_production=%s)", env_raw, allow_in_production,
         )
         return cls(
             domain_allowlist=frozenset(),
@@ -186,3 +214,87 @@ class SigningPolicy:
         if allow_unknown_domain is not None:
             kwargs["allow_unknown_domain"] = allow_unknown_domain
         return replace(self, **kwargs)
+
+    # ── Serialization ──────────────────────────────────────────────────
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a plain dict suitable for JSON / TOML round-trips.
+
+        Sets become sorted lists for deterministic output; tuples become
+        nested lists (TOML-friendly). Round-trips via :meth:`from_dict`.
+        """
+        return {
+            "domain_allowlist": sorted(
+                [list(pair) for pair in self.domain_allowlist]
+            ),
+            "primary_type_allowlist": sorted(self.primary_type_allowlist),
+            "primary_type_denylist": sorted(self.primary_type_denylist),
+            "validity_required_primary_types": sorted(
+                self.validity_required_primary_types
+            ),
+            "max_validity_window_seconds": self.max_validity_window_seconds,
+            "max_future_validity_seconds": self.max_future_validity_seconds,
+            "allow_unknown_domain": self.allow_unknown_domain,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "SigningPolicy":
+        """Reconstruct a SigningPolicy from its :meth:`to_dict` output.
+
+        Missing keys fall back to the dataclass defaults (empty sets /
+        600s window / 900s future / False unknown-domain) — same shape as
+        constructing ``SigningPolicy()`` directly. Lists are converted to
+        frozensets; nested-list domain entries become tuples.
+
+        Raises:
+            ValueError: On malformed entries (e.g. a domain entry that is
+                not a two-element list).
+        """
+        raw_domains = d.get("domain_allowlist", []) or []
+        domain_pairs: set[tuple[int, str]] = set()
+        for i, entry in enumerate(raw_domains):
+            if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                raise ValueError(
+                    f"domain_allowlist[{i}] must be a [chain_id, address] "
+                    f"pair, got {entry!r}"
+                )
+            domain_pairs.add((int(entry[0]), str(entry[1])))
+        return cls(
+            domain_allowlist=frozenset(domain_pairs),
+            primary_type_allowlist=frozenset(d.get("primary_type_allowlist", []) or []),
+            primary_type_denylist=frozenset(d.get("primary_type_denylist", []) or []),
+            validity_required_primary_types=frozenset(
+                d.get("validity_required_primary_types", []) or []
+            ),
+            max_validity_window_seconds=int(d.get("max_validity_window_seconds", 600)),
+            max_future_validity_seconds=int(d.get("max_future_validity_seconds", 900)),
+            allow_unknown_domain=bool(d.get("allow_unknown_domain", False)),
+        )
+
+    # ── Human-readable output ──────────────────────────────────────────
+
+    def __str__(self) -> str:
+        """Multi-line operator-friendly summary; safe for logs + `bcs` CLI."""
+        n_domains = len(self.domain_allowlist)
+        lines = [
+            "SigningPolicy(",
+            f"  domain_allowlist ({n_domains} {'entry' if n_domains == 1 else 'entries'}):",
+        ]
+        for cid, addr in sorted(self.domain_allowlist):
+            lines.append(f"    - chain_id={cid} verifyingContract={addr}")
+        if n_domains == 0:
+            lines.append("    (none)")
+        lines.append(
+            f"  primary_type_allowlist={sorted(self.primary_type_allowlist) or '(any)'}"
+        )
+        lines.append(
+            f"  primary_type_denylist={sorted(self.primary_type_denylist) or '(none)'}"
+        )
+        lines.append(
+            f"  validity: window<={self.max_validity_window_seconds}s, "
+            f"future<={self.max_future_validity_seconds}s, "
+            f"required_for={sorted(self.validity_required_primary_types) or '(none)'}"
+        )
+        lines.append(f"  allow_unknown_domain={self.allow_unknown_domain}")
+        lines.append(")")
+        return "\n".join(lines)

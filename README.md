@@ -526,6 +526,69 @@ logs a WARNING; `EVMWalletProvider._DANGEROUS_sign_typed_data_no_policy()`
 bypasses the gate per-call and logs the caller's filename+line. Both are
 audit-friendly; production / agent-reachable code MUST NOT call them.
 
+**Inspecting the current policy** at runtime:
+
+```python
+wallet = EVMWalletProvider(password=...)
+print(wallet.signing_policy)
+# SigningPolicy(
+#   domain_allowlist (2 entries):
+#     - chain_id=56 verifyingContract=0xcE24439F2D9C6a2289F741120FE202248B666666
+#     - chain_id=97 verifyingContract=0xc70B8741B8B07A6d61E54fd4B20f22Fa648E5565
+#   primary_type_allowlist=['ReceiveWithAuthorization', 'TransferWithAuthorization']
+#   primary_type_denylist=['Permit', 'PermitBatch', 'PermitSingle']
+#   validity: window<=600s, future<=900s, required_for=[...]
+#   allow_unknown_domain=False
+# )
+```
+
+`SigningPolicy.to_dict()` / `from_dict()` round-trip the policy through
+plain dicts (JSON / TOML-friendly) so downstream tools (CLIs, deploy
+manifests) can store and reload configurations declaratively.
+
+### Decision tree — "do I need to configure anything?"
+
+```
+What are you signing?
+│
+├── EIP-3009 TransferWithAuthorization / ReceiveWithAuthorization
+│   against U-token on BSC mainnet (56) or testnet (97)
+│   → ✅ zero config — strict_default() already allows it
+│
+├── Same EIP-3009 type but a different token / chain
+│   (e.g. USDC on Ethereum mainnet)
+│   → 🟡 extend domain_allowlist with (chain_id, token_address)
+│
+├── A custom typed-data primary type
+│   (e.g. "MyOrder" / "BondQuote" / "Auction")
+│   → 🟡 extend primary_type_allowlist with the type name
+│      AND extend domain_allowlist with the verifying contract
+│
+├── EIP-2612 Permit  /  Permit2 PermitSingle/PermitBatch
+│   (unbounded allowance grants)
+│   → ❌ refused unconditionally (denylist takes precedence)
+│      Don't sign these in agent flows.
+│
+├── Permit2 PermitTransferFrom / PermitBatchTransferFrom
+│   (single-use signature transfer — safer subset)
+│   → 🟡 opt in by extending primary_type_allowlist;
+│      witness validation is your responsibility until SDK v0.5+
+│
+└── A longer validity window (e.g. 30-minute authorizations)
+    → 🟡 extend max_validity_window_seconds=1800
+```
+
+| Scenario | Extension snippet |
+|---|---|
+| Add a custom token on chain 56 | `extend(domain_allowlist={(56, "0xMyToken")})` |
+| Add a custom primary type "MyOrder" on chain 56 / contract X | `extend(domain_allowlist={(56, X)}, primary_type_allowlist={"MyOrder"})` |
+| Allow Ethereum-mainnet USDC | `extend(domain_allowlist={(1, "0xA0b8...eB48")})` |
+| Opt into Permit2 SignatureTransfer | `extend(primary_type_allowlist={"PermitTransferFrom"})` |
+| Widen validity to 30 min | `extend(max_validity_window_seconds=1800)` |
+
+Examples: see `examples/security_e2e.py` (signing + recovery loop, 6 assertions)
+and `examples/x402_buyer_demo.py` (complete buyer flow with mock 402 server).
+
 Full design rationale and threat model: see ADR #30 in the
 [bnbchain-studio](https://github.com/bnb-chain/bnbchain-studio) repo
 (`docs/decisions.md`).
